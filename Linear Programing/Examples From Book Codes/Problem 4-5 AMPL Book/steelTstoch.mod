@@ -1,67 +1,42 @@
-#===============================
-# Sets
-#===============================
-set PROD;      # Products
-set S;         # Scenarios
+set PROD;     # products
+set S; 
+param T > 0;  # number of weeks
 
-#===============================
-# Parameters
-#===============================
-param T > 0;                        # Number of periods
+param rate {PROD} > 0;          # tons per hour produced
+param inv0 {PROD} >= 0;         # initial inventory
+param avail {1..T} >= 0;        # hours available in week
+param market {PROD,1..T} >= 0;  # limit on tons sold in week
 
-param rate {PROD} > 0;   
-           # Production rate per product
-param inv0 {PROD} >= 0;  
-           # Initial inventory
-param avail {1..T} >= 0; 
-           # Available production time per period
-param market {PROD,1..T} >= 0;   
-   # Market demand per product per period
+param prodcost {PROD} >= 0;     # cost per ton produced
+param invcost {PROD} >= 0;      # carrying cost/ton of inventory
+param revenue {PROD,1..T,s in S} >= 0;
 
-param prodcost {PROD} >= 0; 
-        # Production cost per unit
-param invcost {PROD} >= 0;  
-        # Inventory holding cost per unit
+param prob {S} >= 0, <= 1;
+check: 0.99999 < sum {s in S} prob[s] < 1.00001;
 
-param revenue {PROD,1..T,S} >= 0; 
-  # Revenue per product per period per scenario
-param prob {S} >= 0, <= 1;          # Probability of each scenario
 
-param tol := 1e-5;   
-               # Tolerance for probability sum
-assert sum {s in S} prob[s] >= 1 - tol;
+var Make {PROD,1..T,s in S} >= 0;      # tons produced
+var Inv {PROD,0..T,s in S} >= 0;       # tons inventoried
+var Sell {p in PROD, t in 1..T, s in S} >= 0, <= market[p,t]; # tons sold
 
-assert sum {s in S} prob[s] <= 1 + tol;
-
-#===============================
-# Decision Variables
-#===============================
-var Make {p in PROD, t in 1..T, s in S} >= 0;
-          # Units produced
-var Inv {p in PROD, 0..T, s in S} >= 0;  
-             # Inventory
-var Sell {p in PROD, t in 1..T, s in S} >= 0, <= market[p,t];  # Units sold
-
-#===============================
-# Objective Function
-#===============================
-maximize Expected_Profit:
+maximize Total_Profit:
    sum {s in S} prob[s] *
-     sum {p in PROD, t in 1..T}
-        (revenue[p,t,s]*Sell[p,t,s] - prodcost[p]*Make[p,t,s] - invcost[p]*Inv[p,t,s]);
+      sum {p in PROD, t in 1..T} (
+         revenue[p,t,s] * Sell[p,t,s] 
+         -prodcost[p] * Make[p,t,s] 
+         - invcost[p] * Inv[p,t,s]);
 
-
-#===============================
-# Constraints
-#===============================
-# Production time limit
-subject to Time {t in 1..T, s in S}:
+subject to Time {t in 1..T,s in S}:
    sum {p in PROD} (1/rate[p]) * Make[p,t,s] <= avail[t];
 
-# Initial inventory
-subject to Init_Inv {p in PROD, s in S}:
-   Inv[p,0,s] = inv0[p];
+               # Total of hours used by all products
+               # may not exceed hours available, in each week
 
-# Inventory balance
-subject to Balance {p in PROD, t in 1..T, s in S}:
-   Make[p,t,s] + Inv[p,t-1,s] = Sell[p,t,s] + Inv[p,t,s];
+subject to Init_Inv {p in PROD,s in S}:  Inv[p,0,s] = inv0[p];
+
+               # Initial inventory must equal given value
+
+subject to Balance {p in PROD, t in 1..T,s in S}:
+   Make[p,t,s] + Inv[p,t-1, s] = Sell[p,t,s] + Inv[p,t,s];
+               # Tons produced and taken from inventory
+               # must equal tons sold and put into inventory

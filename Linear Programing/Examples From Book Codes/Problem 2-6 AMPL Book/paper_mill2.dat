@@ -3,6 +3,8 @@
 set W := 20 45 50 55 75;
 set P := 1 2 3 4 5 6;
 
+param width_roll := 110;
+
 # Orders for each width
 param order := 
 20 48

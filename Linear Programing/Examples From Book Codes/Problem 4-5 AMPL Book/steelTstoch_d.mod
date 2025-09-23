@@ -27,6 +27,15 @@ maximize Total_Profit:
          -prodcost[p] * Make[p,t,s] 
          - invcost[p] * Inv[p,t,s]);
 
+subject to Make_na{p in PROD, s in 1..S-1}: 
+   Make[p,1,s] = Make[p,1,s+1];
+
+subject to Inv_na{p in PROD, s in 1..S-1}: 
+   Inv[p,1,s] = Inv[p,1,s+1];
+
+subject to Sell_na{p in PROD, s in 1..S-1}: 
+   Sell[p,1,s] = Sell[p,1,s+1];
+
 subject to Time {t in 1..T,s in 1..S}:
    sum {p in PROD} (1/rate[p]) * Make[p,t,s] <= avail[t];
 

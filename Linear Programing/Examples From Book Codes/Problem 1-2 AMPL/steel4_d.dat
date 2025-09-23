@@ -8,9 +8,9 @@ param rate:  reheat  roll :=
   coils        200    140
   plate        200    160 ;
 
-param:    profit  commit  market  share:=
-  bands     25     1000    6000    0.4
-  coils     30      500    4000    0.4
-  plate     29      750    3500    0.1;
+param:    profit  market  share:=
+  bands     25     6000    0.4
+  coils     30     4000    0.4
+  plate     29     3500    0.1;
 
 param avail :=  reheat 35   roll   40 ;

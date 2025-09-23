@@ -5,7 +5,6 @@ param rate {PROD,STAGE} > 0; # tons per hour in each stage
 param avail {STAGE} >= 0;    # hours available/week in each stage
 param profit {PROD};         # profit per ton
 
-param commit {PROD} >= 0;    # lower limit on tons sold in week
 param market {PROD} >= 0;    # upper limit on tons sold in week
 param share {PROD} >= 0, <= 1; # share of market for each product
 

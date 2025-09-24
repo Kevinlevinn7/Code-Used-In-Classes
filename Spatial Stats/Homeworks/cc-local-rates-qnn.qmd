@@ -6,6 +6,15 @@ self-contained: true
 
 Instructions:  Answer the following questions and write your answers in a word processor.  Mathematical symbols should be written using the equation editor.  Appropriate graphics should be included.  The document may also be created in LaTeX, though this is NOT encouraged.
 
+```{r}
+library(smacpod)
+library(spatstat)
+library(spatstat.random)
+data(urkiola)
+urkiola
+```
+
+
 # Problem 1 
 
 The `urkiola` data set in the **spatstat package** contains locations of birch (Betula celtiberica) and oak (Quercus robur) trees in a secondary wood in Urkiola Natural Park (Basque country, northern Spain). They are part of a more extensive dataset collected and analysed by Laskurain (2008). The coordinates of the trees are given in meters.  Let the “oak” trees be the cases and “birch” trees be the controls.

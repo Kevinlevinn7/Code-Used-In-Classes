@@ -1,0 +1,61 @@
+---
+title: "Case-Control Point Data Homework (Local Rates and Nearest Neighbors)"
+format: html
+self-contained: true
+---
+
+Instructions:  Answer the following questions and write your answers in a word processor.  Mathematical symbols should be written using the equation editor.  Appropriate graphics should be included.  The document may also be created in LaTeX, though this is NOT encouraged.
+
+# Problem 1 
+
+The `urkiola` data set in the **spatstat package** contains locations of birch (Betula celtiberica) and oak (Quercus robur) trees in a secondary wood in Urkiola Natural Park (Basque country, northern Spain). They are part of a more extensive dataset collected and analysed by Laskurain (2008). The coordinates of the trees are given in meters.  Let the “oak” trees be the cases and “birch” trees be the controls.
+
+## a.
+
+Perform a test to determine whether the most unusual window of case/control event locations in the study area can be considered a cluster using the spatial scan statistic under the random labeling hypothesis.  Use $n_{sim}=199$ randomly labeled data sets and $\alpha=0.10$.  Make sure to clearly describe your null and alternative hypotheses. Make your conclusion in the context of the problem.
+
+## b.
+
+Using your analysis from the previous problem, create a plot of the case/control event locations, the associated study area boundary, and a legend indicating the cases/controls.  Add the window identifying the most unusual window of case/control event locations (according to the spatial scan statistic) and any potential secondary clusters.  Comment on the results.
+
+## c.
+
+Perform a test for clustering using the q nearest neighbors method.  Use $q=3,5,\ldots,19$ and $n_{sim}=499$ randomly labeled data sets.  For which $q$ are there more cases than we would expect under random labeling in the $q$ locations nearest each case?  At what scale does this clustering appear to occur (use the contrasts)?
+
+# Problem 2
+
+Answer the same questions as Problem 1 for the `paracou` data set in the **spatstat** package.  Let the `juveniles` be the controls and `adults` be the cases.  
+
+## a.
+
+Perform a test to determine whether the most unusual window of case/control event locations in the study area can be considered a cluster using the spatial scan statistic under the random labeling hypothesis.  Use $n_{sim}=199$ randomly labeled data sets and $\alpha=0.10$.  Make sure to clearly describe your null and alternative hypotheses. Make your conclusion in the context of the problem.
+
+## b.
+
+Using your analysis from the previous problem, create a plot of the case/control event locations, the associated study area boundary, and a legend indicating the cases/controls.  Add the window identifying the most unusual collection of case/control event locations (according to the spatial scan statistic) and any potential secondary clusters.  Comment on the results.
+
+
+## c.
+
+Perform a test for clustering using the q nearest neighbors method.  Use $q=3,5,\ldots,19$ and $n_{sim}=499$ randomly labeled data sets.  For which $q$ are there more cases than we would expect under random labeling in the q locations nearest each case?  At what scale does this clustering appear to occur (use the contrasts)?
+
+# Problem 3
+
+Write your own function from scratch to implement the q nearest neighbors method, including performing a Monte Carlo simulation to assess significance of your rests.  You may not use any functions from the **spatstat** or **smacpod** packages.
+
+## a.
+
+Create a function, `W`, that takes the event locations and `q`, the number of nearest neighbors, and returns the `W` matrix discussed in the notes.  Apply this function to the `paracou` data with `q = 3`, then use the `image` function to plot the `W` matrix.  Make sure to include your code here.
+
+## b.
+
+Determine the $\delta$ vector discussed in the notes for the `paracou` data, using the adults as cases.  Use the formula $\delta^T W \delta$ to determine $T_q$ for $q=3$.
+
+## c.
+
+Generate 499 data sets under the random labeling hypothesis for the `paracou` data, using the adults as cases.  Determine $T_q$ for each simulated data set for $q=3$.  Compute the sample mean and variance for the statistics coming from the NULL data (do not include the observed statistic).  Compute the Monte Carlo p-value for this test using the observed statistics and the 499 statistics from the simulated data. Make sure to provide your code and clearly indicate the sample mean, sample variance, and Monte Carlo p-value.
+
+# Problem 4
+
+Describe how the set of windows considered for the spatial scan method are constructed. More specifically, consider a specific event location. What would the first window be? What would the next window be for that even location? And so on.
+

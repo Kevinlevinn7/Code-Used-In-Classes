@@ -6,12 +6,16 @@ self-contained: true
 
 Instructions:  Answer the following questions and write your answers in a word processor.  Mathematical symbols should be written using the equation editor.  Appropriate graphics should be included.  The document may also be created in LaTeX, though this is NOT encouraged.
 
+
+Packages and data pulls
 ```{r}
 library(smacpod)
 library(spatstat)
 library(spatstat.random)
 data(urkiola)
+data(paracou)
 urkiola
+paracou
 ```
 
 
@@ -23,13 +27,69 @@ The `urkiola` data set in the **spatstat package** contains locations of birch (
 
 Perform a test to determine whether the most unusual window of case/control event locations in the study area can be considered a cluster using the spatial scan statistic under the random labeling hypothesis.  Use $n_{sim}=199$ randomly labeled data sets and $\alpha=0.10$.  Make sure to clearly describe your null and alternative hypotheses. Make your conclusion in the context of the problem.
 
+Before completing the test, our null and alternative hypothesis is the following 
+𝐻0: There are no cluster of oak tress in the study area.
+𝐻𝑎: There is at least one cluster of oak trees in the study area.
+or even more specifically with our exact test
+
+𝐻0: There are no windows where the most likely cluster is
+more unusual than what is expected under the random
+labeling hypothesis.
+𝐻𝑎: There is at least one window where the most likely cluster
+is more unusual than what is expected under the random
+labeling hypothesis.
+
+```{r}
+scan = spscan.test(urkiola, nsim = 199, case = "oak" , alpha = .10)
+```
+Scan summary in a seperate cell
+```{r}
+summary(scan)
+```
+As we can see our p value is .005 thus indicating that we reject our null hypothesis. In this case we notice that the labeling of oak trees is not consistent with the random labeling hypothesis, or that given we randomly label trees as oak or birch we notice that this is not similar to what we have. This is used by a window that moves and scans each area noticing if there is clustering there. 
+
 ## b.
 
 Using your analysis from the previous problem, create a plot of the case/control event locations, the associated study area boundary, and a legend indicating the cases/controls.  Add the window identifying the most unusual window of case/control event locations (according to the spatial scan statistic) and any potential secondary clusters.  Comment on the results.
 
+Now lets go ahead and plot it. 
+```{r}
+plot(scan, chars = c(1, 20),
+     main = "most likely cluster for urikola data",
+     border = "orange")
+
+# extract most likely and other significant clusters
+clusters(scan)
+
+cl <- parallel::makeCluster(getOption("cl.cores", 2))
+
+# if there were more than 1 cluster ....
+scan2 = spscan.test(urkiola, nsim = 499, case = "oak",
+                    alpha = 0.10, cl = cl)
+summary(scan2)
+plot(scan2, chars = c(1, 20),
+     main = "detected clusters for urkiola data",
+     border = c("orange"))
+clusters(scan2)
+
+```
+To me it seems like the "cluster" shown is extremely big on the map thus I don't know how helpful it is to really pinpoint. However, from past homework this is where we saw some sort of clustering going on so, this is probably what this method could be pinpointing. 
+
+
 ## c.
 
 Perform a test for clustering using the q nearest neighbors method.  Use $q=3,5,\ldots,19$ and $n_{sim}=499$ randomly labeled data sets.  For which $q$ are there more cases than we would expect under random labeling in the $q$ locations nearest each case?  At what scale does this clustering appear to occur (use the contrasts)?
+
+Now we need to developed our test statistic.
+```{r}
+# q nearest neighbor test
+# use position in levels(grave$marks) to select case group
+qnn.test(urkiola,
+         q = seq(3, 19, by = 2),
+         nsim = 499,
+         case = "oak")
+```
+From this it looks like there is clustering all the way from 3 to 19. Based off the contrast however, we see that a big position of the contrast comes from our clustering at 4 cases since as we see in the contrasts the p value at T5-T3 is .002 and the p value does not change after that, thus it seems like as we keep adding more neighbors we are still finding a strong correlation of clustering, thus it would seem our data is clustered as you allow more neighbors and is statistically significant for all greater than 4. 
 
 # Problem 2
 
@@ -39,14 +99,58 @@ Answer the same questions as Problem 1 for the `paracou` data set in the **spats
 
 Perform a test to determine whether the most unusual window of case/control event locations in the study area can be considered a cluster using the spatial scan statistic under the random labeling hypothesis.  Use $n_{sim}=199$ randomly labeled data sets and $\alpha=0.10$.  Make sure to clearly describe your null and alternative hypotheses. Make your conclusion in the context of the problem.
 
+```{r}
+scan3 = spscan.test(paracou, nsim = 199, case = "adult" , alpha = .10)
+```
+
+```{r}
+summary(scan3)
+```
+Straight off the bad with this test the fucntion even returns us a wawrning. "  No significant clusters.  Returning most likely cluster." I dont know if its something wrong on my end but the p value confirms this with a p value of .165 which is high and we fail to reject the null hypothesis that there isn't some sort of clustering within the window of adult cases. 
+
 ## b.
 
 Using your analysis from the previous problem, create a plot of the case/control event locations, the associated study area boundary, and a legend indicating the cases/controls.  Add the window identifying the most unusual collection of case/control event locations (according to the spatial scan statistic) and any potential secondary clusters.  Comment on the results.
 
 
+```{r}
+
+plot(scan3, chars = c(1, 20),
+     main = "most likely cluster for urikola data",
+     border = "orange")
+
+# extract most likely and other significant clusters
+clusters(scan3)
+
+cl <- parallel::makeCluster(getOption("cl.cores", 2))
+
+# if there were more than 1 cluster ....
+scan4 = spscan.test(paracou, nsim = 199, case = "adult",
+                    alpha = 0.10, cl = cl)
+summary(scan4)
+plot(scan4, chars = c(1, 20),
+     main = "detected clusters for paracou data",
+     border = c("orange"))
+clusters(scan4)
+
+
+```
+Both of these plots give us such a small window that it's really not telling us much especially since this window is only of one two full points with some left extra. Thus, it really does help show the initial guess that we dont have any window where there might be some sort of clustering. 
+
 ## c.
 
 Perform a test for clustering using the q nearest neighbors method.  Use $q=3,5,\ldots,19$ and $n_{sim}=499$ randomly labeled data sets.  For which $q$ are there more cases than we would expect under random labeling in the q locations nearest each case?  At what scale does this clustering appear to occur (use the contrasts)?
+
+```{r}
+
+# q nearest neighbor test
+# use position in levels(grave$marks) to select case group
+qnn.test(paracou,
+         q = seq(3, 19, by = 2),
+         nsim = 499,
+         case = "adult")
+```
+With, this test we fail to reject the null hypothesis for clustering in all of our scales of nearest neighbors no matter if 3 or 19 we still get no signs of clustering. This is only shown even more with our contrasts where even our smallest p value is shown to also be driven by the q's happening before hand. 
 
 # Problem 3
 
@@ -56,15 +160,161 @@ Write your own function from scratch to implement the q nearest neighbors method
 
 Create a function, `W`, that takes the event locations and `q`, the number of nearest neighbors, and returns the `W` matrix discussed in the notes.  Apply this function to the `paracou` data with `q = 3`, then use the `image` function to plot the `W` matrix.  Make sure to include your code here.
 
+
+W function:
+```{r}
+W <- function(ppp_data, q, factor = "marks") {
+  cordinates <-cbind(ppp_data$x, ppp_data$y) 
+  distances <- as.matrix(dist(cordinates))
+  n <- nrow(distances)
+  W <- matrix(0, n, n)
+  for (i in 1:n) {
+    d_i <- distances[i, ]
+    d_i[i] <- Inf 
+    q_neighbors <- order(d_i)[1:q]
+    W[i, q_neighbors] <- 1
+  }
+  return(W)
+}
+```
+
+Used:
+```{r}
+Sanity_w <- W(paracou, 3)
+image(Sanity_w)
+```
+
 ## b.
 
 Determine the $\delta$ vector discussed in the notes for the `paracou` data, using the adults as cases.  Use the formula $\delta^T W \delta$ to determine $T_q$ for $q=3$.
+
+
+```{r}
+
+Delta <- function(ppp_data, factors = "marks", case) {
+  marks <- as.vector(ppp_data[[factors]])
+  cord_marks <- ifelse(marks  == case, 1, 0)
+  return(as.numeric(cord_marks))
+}
+
+TSLR <- function(W, D){
+  D <- matrix(D, ncol = 1)
+  t(D) %*% W %*% D
+}
+
+Sanity_d <- Delta(paracou, case = "adult")
+Sanity <- TSLR(Sanity_w, Sanity_d)
+Sanity <- as.numeric(Sanity)
+```
 
 ## c.
 
 Generate 499 data sets under the random labeling hypothesis for the `paracou` data, using the adults as cases.  Determine $T_q$ for each simulated data set for $q=3$.  Compute the sample mean and variance for the statistics coming from the NULL data (do not include the observed statistic).  Compute the Monte Carlo p-value for this test using the observed statistics and the 499 statistics from the simulated data. Make sure to provide your code and clearly indicate the sample mean, sample variance, and Monte Carlo p-value.
 
+We need to create data sets under the RLH, which assumes a constant probability of case-controls assignment in all locations. Lets first do it with one simulated data set then we can build a funciton
+
+```{r}
+#For the one case
+Sanity_w <- W(paracou, 3)
+Sanity_d <- Delta(paracou, case = "adult")
+Sanity <- TSLR(Sanity_w, Sanity_d)
+Sanity <- as.numeric(Sanity)
+
+ 
+nsim <- 5
+data <- paracou
+factors <- "marks"
+case <- "adult"
+nsim <- 100  # number of simulations
+
+T_results <- numeric(nsim)  # initialize a vector to store T_s
+
+for (i in 1:nsim) {
+  #SIMULATION OF DATA
+  simulated <- data.frame(
+    x = paracou$x,
+    y = paracou$y,
+    marks = sample(paracou$marks)  # keep original labels
+  )
+  
+  #COMPUTING T STAT FOR EACH
+  w <- W(simulated, 3)
+  D <- Delta(simulated, case = "adult")  # Delta converts to 0/1 internally
+  T_results[i] <- TSLR(w, D)
+}
+  T_stat <- sum(T_results > Sanity)
+```
+
+
+
+```{r}
+#actual function
+library(progress)
+
+mc_sim_rlh <- function(data, nsim, q, factors, case) {
+  
+  # Original t-stat on real data
+  W_q <- W(data, q)
+  D_q <- Delta(data, factors = factors, case = case)
+  T_q <- as.numeric(TSLR(W_q,D_q))
+  
+  # Initialize results
+  T_results <- numeric(nsim)
+  
+  # Create a progress bar with {progress}
+  pb <- progress_bar$new(
+    format = " Simulating [:bar] :percent | Elapsed: :elapsed | ETA: :eta",
+    total = nsim, clear = FALSE, width = 60
+  )
+  
+  # Simulation loop
+  for (i in 1:nsim) {
+    # Simulate
+    simulated <- data.frame(
+      x = data$x,
+      y = data$y,
+      marks = sample(data$marks)  
+    )
+    
+    # Compute T-stat
+    w <- W(simulated, q)
+    D <- Delta(simulated, case = case)
+    T_results[i] <- TSLR(w, D)
+    
+    # Update progress bar
+    pb$tick()
+  }
+  
+  # Compute results
+  M_res <- mean(T_results)
+  S_res <- sd(T_results)
+  V_res <- S_res^2
+  T_stat <- sum(T_results > T_q)
+  P_val <- ((1+T_stat)/(nsim +1))
+  
+  return(list(
+    T_Statistic = T_stat, 
+    Mean = M_res, 
+    Var = V_res, 
+    SD = S_res, 
+    P_value = P_val
+  ))
+}
+
+
+#Our result
+Result <- mc_sim_rlh(paracou, 499,q = 3,  case = "adult", factors = "marks")
+Result
+```
+
 # Problem 4
 
 Describe how the set of windows considered for the spatial scan method are constructed. More specifically, consider a specific event location. What would the first window be? What would the next window be for that even location? And so on.
+
+So first, it grabs an even location, then it computes a circular scan and computes Twi, which is basically a ratio of the cases inside the window compared to those outside the window. It then uses k nearest neighbors to compute the next circle, including 2 event locations, and computes Twi again, and so on, looking at the proportion of inside the window and outside. This proportion is just the likelihood ratio statistic. It does so iteratively up until all event locations or selected qs have been constructed.
+
+
+
+
+
 

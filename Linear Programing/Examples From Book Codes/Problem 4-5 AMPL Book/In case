@@ -1,0 +1,13 @@
+
+# Oritingal data
+#param revenue:   1     2     3     4 :=
+       #bands    25    26    27    27
+       #coils    30    35    37    39 ;
+
+#param revenue: 1 2 3 4 :=
+       #bands 23 24 25 25
+       #coils 30 33 35 36 ;
+
+#param revenue: 1 2 3 4 :=
+       #bands 21 27 33 35
+       #coils 30 32 33 33 ;

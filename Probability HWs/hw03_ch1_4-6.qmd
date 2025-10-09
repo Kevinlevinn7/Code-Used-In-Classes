@@ -1,0 +1,45 @@
+---
+title: "Hw03"
+format: html
+self-contained: true
+---
+
+# Section 1.5 Independence and 1.6 Counting
+
+# Problem 1
+
+We roll two fair 6-sided dice. Let $A = \{\text{the sum of the two dice is }8\}$. Let $B=\{\text{the first die shows an even number}\}$. Are the events independent?
+
+**Solution**
+
+
+
+# Problem 2
+
+You draw 5 cards at random without replacement from a standard deck of 52 cards. What is the probability that your hand contains only cards of the same suit?
+
+**Solution**
+
+# Problem 3
+
+You draw 5 cards at random without replacement from a standard deck of 52 cards. What is the probability that your hand contains 5 cards with consecutive ranks? Examples of 5 cards of consecutive ranks are e.g., A, 2, 3, 4, 5 or 4, 5, 6, 7, 8 or 10, J, Q, K, A.
+
+**Solution**
+
+# Problem 4
+
+You draw 5 cards at random without replacement from a standard deck of 52 cards. Given that you draw a flush, what is the probability that you have a straight flush? A straight means that you have 5 cards of consecutive rank, e.g., A, 2, 3, 4, 5 or 4, 5, 6, 7, 8 or 10, J, Q, K, A.
+
+**Solution**
+
+# Problem 5
+
+You draw 5 cards at random without replacement from a standard deck of 52 cards. Are the events getting 5 cards of consecutive rank and 5 cards of the same suit independent?
+
+**Solution**
+
+
+
+
+
+

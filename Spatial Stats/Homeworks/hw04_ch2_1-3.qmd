@@ -1,0 +1,66 @@
+---
+title: "Hw04"
+format: html
+self-contained: true
+---
+
+# Section 2.1 Basic Concepts, 2.2 pmfs, 2.3 Functions of Random Variables
+
+# Problem 1
+
+The probability that a patient recovers from an intestinal disease is 0.75. We have 50 individuals who have contracted this disease. What is the probability that:
+
+a. Exactly 40 recover?
+b. At least 30 recover?
+c. At least 25 but no more than 37 recover?
+d. At most 35 recover?
+
+**Solution**
+
+**a.**
+
+**b.**
+
+**c.**
+
+**d.**
+
+# Problem 2
+
+Let $X\sim\text{Geometric}(p)$. Define $q = 1-p$.
+
+a. Show that for a $k\in\mathbb{N}$ (the natural numbers), $P(X > k) = q^k$.
+b. Show that for $a,b\in\mathbb{N}$, $P(X > a + b \mid X > a) = P(X > b)=q^b$.
+
+**Solution**
+
+**a.**
+
+**b.**
+
+# Problem 3
+
+A company manufactures hazardous material. Employees that are exhibiting certain traits are being tested for dangerous exposure to a certain chemical. Historically, individuals in this field who exhibit these signs test positive for dangerous exposure with probability 0.2. What is the probability that it will take at least 10 tests to reach 3 positives?
+
+**Solution**
+
+# Problem 4
+
+Suppose we have a population of $N$ items have two mutually exclusive characteristics. Characteristic A is observed in $r$ items and characteristic B is observed in the remaining $N-r$ items. We will draw $n$ items from the population without replacement. Then  $X\sim\text{Hypergeometric}(N, a, n)$. If $k$ is the number of items in the $n$ drawn that have characteristic $A$, then
+$$
+p_X(k) = \frac{\binom{r}{k}\binom{N-r}{n-k}}{\binom{N}{n}}, \quad k = 0, 1, 2, \ldots.
+$$
+
+Consider a sampling of 20 applicants for a job. There are 3 excellent candidates and 17 suitable candidates (who are not excellent). If we randomly select 5 applicants, what is the probability that all 3 excellent applicants are among the ones selected?
+
+**Solution**
+
+# Problem 5
+
+Consider a sequence i.i.d. $\text{Bernoulli}(p)$ trials. We keep performing trials until we observe $r$ successes. Let $X$ be the number of failures we observe before $r$ successes occur. 
+
+Determine the pmf and range of $X$.
+
+**Solution**
+
+

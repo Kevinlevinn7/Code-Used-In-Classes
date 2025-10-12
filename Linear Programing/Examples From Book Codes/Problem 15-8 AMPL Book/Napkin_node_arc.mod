@@ -1,31 +1,53 @@
+# Define T as a numeric range
 set T;
-    # time periods 1...T
 
+param t_slow > 0, integer;  
+param t_fast > 0, integer; 
+param clean_slow > 0; 
+param clean_fast > 0; 
+param price_new >= 0; 
+param price_trash >= 0; 
+param demand {T} >= 0; 
+param initial_stock >= 0; 
 
-param time_slow > 0; # hours per napkin in each cycle  
-param time_fast > 0;  # hours per napkin in each cycle
+# Decision variables (traditional approach)
+var Bought {T} >= 0;                    # Napkins bought new each day
+var Carried {t in T: t < card(T)} >= 0; # Napkins carried to next day
+var Sent_to_clean_slow {T} >= 0;        # Sent to slow laundry
+var Sent_to_clean_fast {T} >= 0;        # Sent to fast laundry  
+var sent_to_trash {T} >= 0;             # Discarded napkins
+var Cleaned_slow {t in T: t + t_slow <= card(T)} >= 0; # Returned from slow laundry
+var Cleaned_fast {t in T: t + t_fast <= card(T)} >= 0; # Returned from fast laundry
+var Stock {T} >= 0;                     # Inventory at start of each day
 
-param p_slow > 0;  # Price for slow cycle
-param p_fast > 0;  # Price for fast cycle
-param price_new >= 0;  # price of new napkins
-
-param demand {T} >= 0;  # demand for napkins in each period
-param inital_stock >= 0; # initial inventory of napkins
-
+# Objective function
 minimize Total_Cost:
+    sum {t in T} price_new * Bought[t] 
+    + sum {t in T} clean_slow * Sent_to_clean_slow[t] 
+    + sum {t in T} clean_fast * Sent_to_clean_fast[t] 
+    + sum {t in T} price_trash * sent_to_trash[t];
 
-node Balance {t in T}:
-    net_in = demand[t] - supply[t]; #The supply and demand from each period are equal
+# Inventory balance constraints
+subject to Inventory_Balance {t in T}:
+    Stock[t] + Bought[t] 
+    + (if t - t_slow >= 1 then Cleaned_slow[t - t_slow] else 0)
+    + (if t - t_fast >= 1 then Cleaned_fast[t - t_fast] else 0)
+    - (if t < card(T) then Carried[t] else 0)
+    - Sent_to_clean_slow[t]
+    - Sent_to_clean_fast[t]
+    - sent_to_trash[t]
+    = demand[t];
 
-arc Buy {t in T} >= 0;   # napkins bought in period t 
+subject to Carry_Definition {t in T: t < card(T)}:
+    Carried[t] = Stock[t+1];
 
-arc fast {t in T} >= 0;:
-    from demand[t], to demand[t + time_fast], obj Total_Cost p_fast;
+# Initial stock
+subject to Initial_Stock:
+    Stock[1] = initial_stock;
 
-arc slow {t in T}
+# Laundry balance constraints
+subject to Dirty_Slow_Balance:
+    sum {t in T} Sent_to_clean_slow[t] = sum {t in T: t + t_slow <= card(T)} Cleaned_slow[t];
 
-
-arc trash {t in T}
-
-
-arc carry {t in T}
+subject to Dirty_Fast_Balance:
+    sum {t in T} Sent_to_clean_fast[t] = sum {t in T: t + t_fast <= card(T)} Cleaned_fast[t];

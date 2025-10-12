@@ -1,14 +1,14 @@
 # Define time periods (e.g., 7 days)
-set T := 1 2 3 4 5 6 7;
+param T := 7;
 
 # Parameters
-param t_slow := 3;      # 3-day slow cleaning
-param t_fast := 1;      # 1-day fast cleaning  
+param t_slow := 4;      # 3-day slow cleaning
+param t_fast := 2;      # 1-day fast cleaning  
 param clean_slow := 5;  # $5 for slow cleaning
 param clean_fast := 10; # $10 for fast cleaning
 param price_new := 15;  # $15 for new napkins
 param price_trash := 2; # $2 to trash napkins
-param initial_stock := 50;
+
 
 # Daily demands
 param demand :=

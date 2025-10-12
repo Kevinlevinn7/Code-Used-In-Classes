@@ -12,8 +12,6 @@ param demand {1..T} >= 0; # demand for napkins in each period
 
 
 # Node declarations - simplified
-node Dirty_slow{t in 1..T};
-node Dirty_fast{t in 1..T};
 node Start_Day{t in 1..T};
 node End_Day{t in 1..T};
 node Used{t in 1..T};

@@ -1,24 +1,35 @@
-# Define T as a numeric range
-set T;
+set T ordered ; #time periods 
 
-param t_slow > 0, integer;  
-param t_fast > 0, integer; 
-param clean_slow > 0; 
-param clean_fast > 0; 
-param price_new >= 0; 
-param price_trash >= 0; 
-param demand {T} >= 0; 
-param initial_stock >= 0; 
+param t_slow > 0, integer;  # MUST BE INTEGER for indexing
+param t_fast > 0, integer; # MUST BE INTEGER for indexing
+param clean_slow > 0; # Price for slow cycle 
+param clean_fast > 0; # Price for fast cycle 
+param price_new >= 0; # price of new napkins 
+param price_trash >= 0; # price to trash napkins 
+param demand {T} >= 0; # demand for napkins in each period 
+param inital_stock >= 0; # initial inventory of napkins 
 
-# Decision variables (traditional approach)
-var Bought {T} >= 0;                    # Napkins bought new each day
-var Carried {t in T: t < card(T)} >= 0; # Napkins carried to next day
-var Sent_to_clean_slow {T} >= 0;        # Sent to slow laundry
-var Sent_to_clean_fast {T} >= 0;        # Sent to fast laundry  
-var sent_to_trash {T} >= 0;             # Discarded napkins
-var Cleaned_slow {t in T: t + t_slow <= card(T)} >= 0; # Returned from slow laundry
-var Cleaned_fast {t in T: t + t_fast <= card(T)} >= 0; # Returned from fast laundry
-var Stock {T} >= 0;                     # Inventory at start of each day
+# Node declarations - simplified
+node Dirty_slow;
+node Dirty_fast;
+node SUPPLIER;
+node TRASH;
+node Day_T {t in T};
+
+# Arc definitions
+arc Bought {t in T} >= 0, <= demand[t], from SUPPLIER, to Day_T[t];
+
+arc Carried {t in T: t < last(T)} >= 0, from Day_T[t], to Day_T[t+1];
+
+arc Sent_to_clean_slow {t in T} >= 0, from Day_T[t], to Dirty_slow;
+
+arc Sent_to_clean_fast {t in T} >= 0, from Day_T[t], to Dirty_fast;
+
+arc sent_to_trash {t in T} >= 0, from Day_T[t], to TRASH;
+
+arc Cleaned_slow {t in T: t + t_slow in T} >= 0, from Dirty_slow, to Day_T[t + t_slow];
+
+arc Cleaned_fast {t in T: t + t_fast in T} >= 0, from Dirty_fast, to Day_T[t + t_fast];
 
 # Objective function
 minimize Total_Cost:
@@ -27,27 +38,23 @@ minimize Total_Cost:
     + sum {t in T} clean_fast * Sent_to_clean_fast[t] 
     + sum {t in T} price_trash * sent_to_trash[t];
 
-# Inventory balance constraints
-subject to Inventory_Balance {t in T}:
-    Stock[t] + Bought[t] 
-    + (if t - t_slow >= 1 then Cleaned_slow[t - t_slow] else 0)
-    + (if t - t_fast >= 1 then Cleaned_fast[t - t_fast] else 0)
-    - (if t < card(T) then Carried[t] else 0)
+# Node balance constraints
+subject to Daily_Demand_Balance {t in T}:
+    (if t in T then 0 else 0)  # just placeholder start
+    Bought[t]
+    + (if t > first(T) and t-1 in T then Carried[t-1] else inital_stock)
+    + (if t - t_slow in T then Cleaned_slow[t - t_slow] else 0)
+    + (if t - t_fast in T then Cleaned_fast[t - t_fast] else 0)
+    - (if t < last(T) then Carried[t] else 0)
     - Sent_to_clean_slow[t]
     - Sent_to_clean_fast[t]
     - sent_to_trash[t]
     = demand[t];
 
-subject to Carry_Definition {t in T: t < card(T)}:
-    Carried[t] = Stock[t+1];
 
-# Initial stock
-subject to Initial_Stock:
-    Stock[1] = initial_stock;
-
-# Laundry balance constraints
+# Dirty node balance constraints
 subject to Dirty_Slow_Balance:
-    sum {t in T} Sent_to_clean_slow[t] = sum {t in T: t + t_slow <= card(T)} Cleaned_slow[t];
+    sum {t in T} Sent_to_clean_slow[t] = sum {t in T: t + t_slow in T} Cleaned_slow[t];
 
 subject to Dirty_Fast_Balance:
-    sum {t in T} Sent_to_clean_fast[t] = sum {t in T: t + t_fast <= card(T)} Cleaned_fast[t];
+    sum {t in T} Sent_to_clean_fast[t] = sum {t in T: t + t_fast in T} Cleaned_fast[t];|

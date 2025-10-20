@@ -7,7 +7,7 @@ param t_fast := 2;      # 1-day fast cleaning
 param clean_slow := 5;  # $5 for slow cleaning
 param clean_fast := 10; # $10 for fast cleaning
 param price_new := 15;  # $15 for new napkins
-param price_trash := 2; # $2 to trash napkins
+param price_trash := 0; # $2 to trash napkins
 
 
 # Daily demands

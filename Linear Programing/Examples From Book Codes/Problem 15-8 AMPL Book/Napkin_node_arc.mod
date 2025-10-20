@@ -15,8 +15,8 @@ param demand {1..T} >= 0; # demand for napkins in each period
 node Start_Day{t in 1..T};
 node End_Day{t in 1..T};
 node Used{t in 1..T};
-node SUPPLIER;
-node TRASH;
+node SUPPLIER: net_out>=0;
+node TRASH: net_in>=0;
 
 # Arc definitions
 minimize Total_Cost

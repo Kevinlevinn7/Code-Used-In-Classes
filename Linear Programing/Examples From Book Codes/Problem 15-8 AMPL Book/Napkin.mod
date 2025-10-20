@@ -1,4 +1,4 @@
-set T;
+param T;
     # time periods 1...T
 
 
@@ -14,14 +14,14 @@ param demand {T} >= 0;  # demand for napkins in each period
 param inital_stock >= 0; # initial inventory of napkins
 
 
-var Buy[t] >= 0;   # napkins bought in period t
-var Carry[t] >= 0; # napkins carried from period t to t+1
-var Wash2[t] >= 0; # napkins washed in fast cycle in period t
-var Wash4[t] >= 0; # napkins washed in slow cycle in period t
-var Trash[t] >= 0; # napkins trashed in period t
+var Buy[t in 1..T] >= 0;   # napkins bought in period t
+var Carry[t in 1..T] >= 0; # napkins carried from period t to t+1
+var Wash2[t in 1..T] >= 0; # napkins washed in fast cycle in period t
+var Wash4[t in 1..T] >= 0; # napkins washed in slow cycle in period t
+var Trash[t in 1..T] >= 0; # napkins trashed in period t
 
 minimize Total_Cost:
-   sum {t in T} (price_new * Buy[t] +
+   sum {t in 1..T} (price_new * Buy[t] +
                   clean_fast * Wash2[t] +
                   clean_slow * Wash4[t] +
                   price_trash * Trash[t]);

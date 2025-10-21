@@ -1,37 +1,59 @@
-set Day;
+set T; #time periods 
 
-param T > 0, integer; # MUST BE INTEGER for indexing
-param t_slow > 0, integer;  # MUST BE INTEGER for indexing
-param t_fast > 0, integer; # MUST BE INTEGER for indexing
+
+param t_slow > 0;
+param t_fast > 0; 
 param clean_slow > 0; # Price for slow cycle 
 param clean_fast > 0; # Price for fast cycle 
 param price_new >= 0; # price of new napkins 
 param price_trash >= 0; # price to trash napkins 
-param demand {1..T} >= 0; # demand for napkins in each period
+param demand {T} >= 0; # demand for napkins in each period 
+param inital_stock >= 0; # initial inventory of napkins 
 
-
-
-# Node declarations - simplified
-node Start_Day{t in 1..T};
-node End_Day{t in 1..T};
-node Used{t in 1..T};
-node SUPPLIER: net_out>=0;
-node TRASH: net_in>=0;
-
-# Arc definitions
-minimize Total_Cost
+minimize Total_Cost:
+    # 1. Cost of Buying New Napkins
+    sum {t in T} price_new * Bought[t] 
+    
+    # 2. Cost of Slow Cleaning (flow through Sent_to_clean_slow or Cleaned_slow)
+    #    It's standard to associate the washing cost with the act of washing/sending.
+    + sum {t in T} clean_slow * Sent_to_clean_slow[t] 
+    
+    # 3. Cost of Fast Cleaning (flow through Sent_to_clean_fast or Cleaned_fast)
+    + sum {t in T} clean_fast * Sent_to_clean_fast[t] 
+    
+    # 4. Cost of Trashing Napkins
+    + sum {t in T} price_trash * sent_to_trash[t]
+    
+    # Note: Carrying napkins usually has zero cost, so Carried[t] is omitted.
 ;
+    
+node Day_T{t in T};
+node CLEAN {t in T}; 
+    net_in = net_out; 
+node Dirty_slow {t in T}; 
+    net_in = net_out; 
+node Dirty_fast {t in T}; 
+    net_in = net_out
+node SUPPLIER; 
+node TRASH; 
 
-arc Bought {t in 1..T} >= 0, from SUPPLIER, to Start_Day[t], obj Total_Cost price_new;
+arc Bought {t in T} >= 0, <= demand[t], from SUPPLIER, to Day_T[t]; 
 
-arc Carried {t in 1..T-1} >= 0, from End_Day[t], to Start_Day[t+1]; 
+arc Carried {t in T excluding last(T)} >= 0, from Day_T[t], to Day_T[t+1]; 
 
-arc Demand {t in 1..T} >= demand[t], from Start_Day[t], to Used[t];
+arc Sent_to_clean_slow {t in T} >=0, from Day_T[t], to Dirty_slow[t]; 
 
-arc Sent_to_clean_slow {t in 1..T-t_slow} >= 0, from Used[t], to Start_Day[t+t_fast], obj Total_Cost clean_slow;
+arc Sent_to_clean_fast {t in T} >=0, from Day_T[t], to Dirty_fast[t]; 
 
-arc Sent_to_clean_fast {t in 1..T-t_fast} >= 0, from Used[t], to Start_Day[t+t_fast], obj Total_Cost clean_fast;
+arc sent_to_trash {t in T} >=0, from Day_T[t], to TRASH; 
 
-arc sent_to_trash {t in 1..T} >= 0, from Used[t], to TRASH, obj Total_Cost price_trash;
+arc Cleaned_slow {t in T: t + t_slow in T} >=0, from Dirty_slow[t], to Day_T[t + t_slow]; 
 
+arc Cleaned_fast {t in T: t + t_fast in T} >=0, from Dirty_fast[t], to Day_T[t + t_fast]; 
+
+
+subject to Daily_Demand_Balance {t in T}:
+    net_in[Day_T[t]] - net_out[Day_T[t]] = 
+        - demand[t] 
+        + (if t == first(T) then inital_stock else 0);
 

@@ -1,0 +1,20 @@
+set OBJECTS := a b c d e f g h i j;
+
+param knapsacks := 2; 
+
+
+param: weight value volume:=
+a   55   1000  3
+b   50    800. 3
+c   40    750. 3
+d   35    700. 2
+e   30    600. 2
+f   30    550. 2
+g   15    250. 2
+h   15    200. 1
+i   10    200. 1
+j    5    150. 1;
+
+param weight_capacity := 50;
+
+param volume_capacity := 3;

@@ -1,0 +1,371 @@
+---
+title: "Hw08 - Geostatistics Homework (Prediction)"
+format: html
+self-contained: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The `cow.rda` file contains a data frame with 200 spatial observations observed throughout the state of Colorado.  The data frame includes `easting` and `northing` coordinates (UTM, scaled by 1000 meters) and Tungsten measurements (`W`) at each site (mg/kg). Read in the data as a data frame from the file.  
+
+# Preliminaries
+
+Load the **gstat** and **geoR** packages. Load the `cow.rda` file.
+
+```{r}
+load("cow.rda")
+```
+```{r}
+library(ggplot2)
+library(gstat)
+library(geoR)
+```
+
+
+# Problem 0
+
+Create `cow_sf`, an `sf` version of `cow` that uses `easting` and `northing` for `coords`. 
+
+Create `geocow`, a `geodata` object from the **geoR** package.
+
+Also run the following code.
+
+```{r}
+set.seed(1)
+
+poly_sf <- sf::st_polygon(x = list(cbind(
+  c(152, 152, 753, 753, 152),
+  c(4100, 4544, 4544, 4100, 4100))))
+
+
+
+grid_sf <- sf::st_sample(poly_sf, size = 100,
+                         type = "regular")
+
+cow_sf <- sf::st_as_sf(cow,
+                       coords = c("easting", "northing"))
+
+geocow = as.geodata(cbind(cow$easting , cow$northing,cow$W))
+
+
+
+```
+
+**Solution**
+
+# Problem 1 (Using geoR)
+
+Use REML estimation with a constant mean function to fit the following covariance models to the data:
+
+a. An isotropic spherical model.
+b. A geometric anisotropic spherical model.
+c. An isotropic exponential model.
+d. A geometric anisotropic exponential model.
+
+Make a table that provides the following information about each model: model, partial sill ($c$), range parameter ($a$ or $a_{min}$), nugget ($c_0$), direction of the major axis in degrees, (if appropriate), anisotropy ratio $a_{max}/a_{min}$, AIC of the fit.
+
+Note: starting values make a HUGE difference for the anisotropic models, so you probably want to experiment a bit.
+
+Which model is the best choice?
+
+```{r}
+variog1b = variog(geocow)
+plot(variog1b)
+
+###Isotropic Spherical
+lfit_sph = likfit(geocow,
+                  ini.cov.pars = c(1.5, 500),
+                  nugget = 0.5,
+                  cov.model = "spherical",
+                  lik.method = "REML",
+                  trend = "cte")
+
+lfit_sph
+
+v <- variog4(geocow)
+plot(v)
+amax <- 600
+amin <- 300
+a <- 600/300
+
+
+###Anisorpic Spherical
+lfit1 = likfit(geocow, ini.cov.pars = c(1.5, 500),
+               nugget = 0.5,
+               cov.model = "spherical",
+               lik.method = "REML",
+               psiA = 70/180*pi, 
+               psiR = a,
+               trend = "cte")
+
+
+####Isotropic Exp
+lfit_exp = likfit(geocow,
+                  ini.cov.pars = c(1.5, 500),
+                  nugget = 0.5,
+                  cov.model = "exponential",
+                  lik.method = "REML",
+                  trend = "cte")
+
+###Anisorpic Exp
+lfit2 = likfit(geocow, ini.cov.pars = c(1.5, 500),
+               nugget = 0.5,
+               cov.model = "exponential",
+               lik.method = "REML",
+               psiA = 70/180*pi, 
+               psiR = a,
+               trend = "cte")
+
+model <- c("Isotropic Spherical", "Anisorpic Spherical", "Isotropic Exp", "Anisorpic Exp")
+
+```
+```{r}
+
+
+# Parameters from your model fits
+partial_sill <- c(lfit_sph$sigmasq,  lfit1$sigmasq, lfit_exp$sigmasq,lfit2$sigmasq) 
+
+range_param   <- c(lfit_sph$phi, lfit1$phi, lfit_exp$phi,lfit2$phi)       
+
+nugget        <- c(lfit_sph$nugget, lfit1$nugget, lfit_exp$nugget, lfit2$nugget)      
+
+direction_deg <- c(lfit_sph$aniso.pars[1],lfit1$aniso.pars[1], lfit_exp$aniso.pars[1], lfit2$aniso.pars[1]) 
+
+psiR <- c(lfit_sph$aniso.pars[2],lfit1$aniso.pars[2], lfit_exp$aniso.pars[2], lfit2$aniso.pars[2])
+
+AIC  <- c(lfit_sph$AIC, lfit1$AIC, lfit_exp$AIC, lfit2$AIC)  
+
+model_summary <- data.frame(
+  Model = model,
+  Partial_Sill = partial_sill,
+  Range = range_param,
+  Nugget = nugget,
+  Direction_Degrees = direction_deg,
+  Anisotropy_Ratio = psiR,
+  AIC = AIC
+)
+
+model_summary
+model_summary$Model[which.min(AIC)]
+
+```
+
+
+**Solution**
+The best model using only AIC would be Anisorpic Spherical which makes sense because if we do look at our variogram when split into 4 different groups we see that not all of them follow the same trend on distance. Thus, of course if we acount for this in our anisopric model it is going to preform better even though we might be estimating more parameters. 
+
+
+
+# Problem 2
+
+Create two `gstat` objects with a constant mean and the directional semivariogram model that matches the REML fit provided below. For the first, assume the nugget is microscale error (standard kriging) while the second is measurement error (filtered kriging).
+
+Reminder: **gstat** and **geoR** parameterize the angle and ratio of the $a_{minor}$ and $a_{major}$ differently, so carefully read the documentation. 
+
+```
+Summary of the parameter estimation
+-----------------------------------
+Estimation method: restricted maximum likelihood 
+
+Parameters of the mean component (trend):
+  beta 
+0.9343 
+
+Parameters of the spatial component:
+   correlation function: exponential
+      (estimated) variance parameter sigmasq (partial sill) =  1.158
+      (estimated) cor. fct. parameter phi (range parameter)  =  3.276
+   anisotropy parameters:
+      (fixed) anisotropy angle = 0.7854  ( 45.0001052295748 degrees )
+      (fixed) anisotropy ratio = 2
+
+Parameter of the error component:
+      (estimated) nugget =  0.102
+
+Transformation parameter:
+      (fixed) Box-Cox parameter = 1 (no transformation)
+
+Practical Range with cor=0.05 for asymptotic range: 9.812505
+
+Maximised Likelihood:
+   log.L n.params      AIC      BIC 
+"-296.1"      "4"  "600.1"  "613.3" 
+
+non spatial model:
+   log.L n.params      AIC      BIC 
+"-297.6"      "2"  "599.1"  "605.7" 
+
+Call:
+likfit(geodata = geocow, ini.cov.pars = c(0.5, 10), fix.nugget = FALSE, 
+    nugget = 0.1, fix.psiA = TRUE, psiA = pi/4, fix.psiR = TRUE, 
+    psiR = 2, cov.model = "exponential", lik.method = "REML", 
+    messages = FALSE)
+```
+
+**Solution**
+
+```{r}
+# vgm(c, "model", amax = amin * psiR, c0),
+#     anis = c(angle, 1/psiR = amin/amax)
+
+fitkrig =  vgm(psill = 1.158,
+            model = "Exp",
+            range = 3.2760,
+            nugget = .102,
+            anis = c(45.0001052295748, 1/2))
+
+ganiso1 = gstat(id = "k", formula = W ~ 1, data = cow_sf,
+                model = fitkrig)
+
+fitnoiseykrigy  = vgm(psill = 1.158,
+            model = "Exp",
+            range = 3.2760,
+            anis = c(45.0001052295748, 1/2),
+            Err = .102)
+
+ganiso2 = gstat(id = "k", formula = W ~ 1, data = cow_sf,
+                model = fitnoiseykrigy)
+                       
+```
+
+
+# Problem 3
+
+Perform standard kriging at the locations contained in `grid_sf` using the `gstat` object created in the previous problem.
+
+Use the `summary` function to summarize your results.
+
+**Solution**
+
+```{r}
+
+ok = predict(ganiso1, data = cow_sf, newdata = grid_sf)
+summary(ok)
+
+
+```
+
+
+
+# Problem 4
+
+Perform filtered kriging at the locations contained in `grid_sf` using the `gstat` object created in Problem 2.
+
+Use the `summary` function to summarize your results.
+
+**Solution**
+
+
+```{r}
+
+noisek = predict(ganiso2, data = cow_sf, newdata = grid_sf)
+summary(noisek)
+```
+
+
+
+
+# Problem 5
+
+Are the predictions for standard and filtered kriging identical for the predictions above? Why?
+
+**Solution**
+
+Yes the predictions are the same since the filtered kriging only affects variance, since with filtered kriging we are saying that we know that our data has some noise attached to it so we are account for it with our variance being a little bit higher. However, our actual preidctions should be the same. 
+# Problem 6
+
+Create side-by-side plots of the kriging variances from Problems 3 and 4 with a common color scale. Which variances are higher?
+
+**Solution**
+
+```{r}
+
+
+predictions_bloack <- rbind(
+  cbind(ok[c("k.pred", "k.var")], type = "Oridnary"),
+  cbind(noisek[c("k.pred", "k.var")], type = "Noise"))
+
+# plot of kriging variance
+ggplot(predictions_bloack) +
+  geom_sf(aes(fill = k.var, color = k.var)) +
+  facet_wrap(~ type) +
+  scale_fill_viridis_c() +
+  scale_color_viridis_c()
+
+```
+
+
+
+# Problem 7
+
+Perform standard kriging at the locations contained in `cow_sf` using the `gstat` object created in Problem 2.
+
+Use the `summary` function to summarize your results.
+
+Perform filtered kriging at the locations contained in `grid_sf` using the `gstat` object created in Problem 2.
+
+Use the `summary` function to summarize your results.
+
+**Solution**
+
+
+```{r}
+ok2 = predict(ganiso1, data = cow_sf, newdata = cow_sf)
+summary(ok2)
+```
+
+
+
+# Problem 8
+
+Perform filtered kriging at the locations contained in `cow_sf` using the `gstat` object created in Problem 2.
+
+Use the `summary` function to summarize your results.
+
+**Solution**
+
+
+```{r}
+
+noisek2 = predict(ganiso2, data = cow_sf, newdata = cow_sf)
+summary(noisek2)
+```
+
+
+
+
+# Problem 9
+
+Are the standard and unfiltered kriging predictions the same at the observed data locations? Why?
+
+**Solution**
+
+So for this, we now see the predictions are the same; however, the thing that changes is that with our standard kriging, we have zero variance because we know the value at that location, so we don’t need to add in the variance for it. However, since with filtered kriging we assume that there is always some error, we try to predict the noiseless prediction, which in turn means that even at our known locations, that model still shows some variance in it.
+
+
+
+# Problem 10
+
+What do you notice about the kriging variances for the filtered and unfilted kriging predictions at observed data locations?
+
+**Solution**
+
+```{r}
+predictions_bloack <- rbind(
+  cbind(ok2[c("k.pred", "k.var")], type = "Oridnary"),
+  cbind(noisek2[c("k.pred", "k.var")], type = "Noise"))
+
+# plot of kriging variance
+ggplot(predictions_bloack) +
+  geom_sf(aes(fill = k.var, color = k.var)) +
+  facet_wrap(~ type) +
+  scale_fill_viridis_c() +
+  scale_color_viridis_c()
+
+```
+
+This question builds off very similar to the last. WIth ordinary we make sure that we go trhough our data, hwoever, with filtered kriging we are instead assuming that our data is noisy thus we don't have to 100 percent go trhough it and we can have some variation within it. 
+
+

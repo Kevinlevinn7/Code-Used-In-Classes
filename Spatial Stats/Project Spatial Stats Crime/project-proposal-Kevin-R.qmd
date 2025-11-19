@@ -1,0 +1,82 @@
+---
+title: "project-proposal-kevin"
+format: html
+editor: visual
+---
+
+Provide the the following information for your project.
+
+1.  What research question(s) do you hope to answer?
+
+I want to notice that if according to the CRH based on population do I get the right amount of hospitals or do some of these hospitals tend to go to specific areas more than others.
+
+2.  From where did you obtain the data you will use to answer your research question? Please provide a link I can follow, if possible.
+
+I obtained the data directly from the secretary of health of Mexico.
+
+3.  How many observations does your data set have?
+
+```{r}
+library(readr)
+
+Merged_CLUES_2016 <- read_csv("Merged_CLUES_2016.csv")
+head(Merged_CLUES_2016)
+```
+
+```{r}
+nrow(Merged_CLUES_2016)
+```
+
+I have a total of 15,116 observations, each row is a code used by the secretary of health of Mexico where they identify a registered health provider
+
+4.  Are you merging multiple data sets?
+
+Yes, I merged a data set with the CLUES infomration regarding establishment location type and other descriptors. Then I merged a dataset describing ONLY PUBLIC HEALTH providers where they had information on doctors, practices, etc.
+
+5.  Provide a table listing each variable you are considering for analysis, briefly describe each variable (e.g., the number of disease cases in each region), and the variable type (e.g., numeric, factor, date, etc.).
+
+```{r}
+
+library(sf)
+library(readxl)
+library(ggplot2)
+library(dplyr)
+IM usi
+unzip("mx_shp.zip", exdir = "mx_shp")
+mex_shp <- st_read("mx_shp/mx.shp")
+
+Merged_CLUES_2016_clean <- Merged_CLUES_2016 |>
+  dplyr::filter(!is.na(longitude), !is.na(latitud)) 
+
+pts_sf <- st_as_sf(Merged_CLUES_2016_clean, coords = c("longitude", "latitud"),  crs = 4326)
+
+plot(st_geometry(mex_shp), col = "white", border = "gray")
+plot(st_geometry(pts_sf), col = "red", pch = 5, add = TRUE, cex = .5)
+
+```
+
+```{r}
+chih_sf <- mex_shp |> 
+  filter(name == "Chihuahua")
+
+chih_pts <- pts_sf |> 
+  filter(state_code == 8)
+
+
+plot(st_geometry(chih_sf), col = "white", border = "gray")
+plot(st_geometry(chih_pts), col = "red", add = TRUE, cex = .5, size = 1)
+```
+
+5.  What will your response variable be for answering the research question(s)?
+
+My response variable will be the number of clinics in a specific municipality.
+
+5.  Provide relevant exploratory plots of your data.
+
+```{r}
+summary(Merged_CLUES_2016_clean)
+```
+
+5.  What methods do you plan to use to answer your question of interest?
+
+I plan to do B-N, CEPP, Spatial Scan, or Tango I will try them all and then just kind of see the overall effect.

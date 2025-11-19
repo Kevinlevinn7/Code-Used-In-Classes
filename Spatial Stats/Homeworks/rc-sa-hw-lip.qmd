@@ -1,0 +1,374 @@
+---
+title: "Hw06 - Regional Count Data Homework (Spatial Autocorrelation)"
+format: html
+self-contained: true
+---
+
+The `lip_sf` is an `sf` data frame with 53 rows representing counties and 5 variables. The data frame contains 53 county-level observations for lip cancer among males in Scotland between 1975-1980. The variables are:
+
+-   `name`: county name
+-   `cancer`: number of Lip cancer cases in the county (Cressie 1993)
+-   `population`: county population size (Cressie 1993)
+-   `expected`: expected number of lip cancer cases (Lawson 1999)
+-   `geometry`: geometric representation of counties in Scotland.
+
+Source Kemp I., Boyle P., Smans M. and Muir C. (1985) Atlas of cancer in Scotland, 1975-1980, incidence and epidemiologic perspective. *International Agency for Research on Cancer*. 72
+
+Cressie, N. A. C. (1993). Statistics for Spatial Data. New York: John Wiley & Sons, p. 537 Table 7.2.
+
+Lawson, A., Biggeri, A., Böhning, D., Lesaffre, E., Viel, J. F., & Bertollini, R. (Eds.). (1999). Disease Mapping and Risk Assessment for Public Health. New York: Wiley, pp. 68-69, Table 5.1.
+
+We run the following command to load `lip_sf` (assuming the `.rda` is in your search path).
+
+```{r}
+load("lip_sf.rda")
+
+install.packages("spdep")
+install.packages("smerc")
+
+install.packages("sf")
+```
+
+We run the following commands to geometrically obtain centroids for each county and create a neighborhood object for the data.
+
+```{r}
+#| include: false
+library(sf)
+library(smerc)
+library(spdep)
+```
+
+```{r}
+coords <- st_coordinates(st_centroid(st_geometry(lip_sf)))
+lip_nb <- poly2nb(lip_sf, queen=TRUE)
+```
+
+# Problem 1
+
+Plot the neighborhood connections stored in `lip_nb`. What do you observe?
+
+**Solution**
+
+```{r}
+plot(st_geometry(lip_sf), border = "grey60")
+plot(lip_nb, coords = coords,
+     add=TRUE, col="blue", pch = 19, cex = 0.6)
+```
+In my opinion I see that there are a lot more connected nodes towards the middle and bottom of the map. With smaller number of connected nodes in the upper right and upper side of the map. 
+
+# Problem 2
+
+Use the Moran’s I statistic to test whether there is evidence of positive spatial autocorrelation for the `cancer` variable under the constant risk hypothesis. 
+Use a row standardized weights matrix for the `lip_nb` neighbor relationship.
+Use the `expected` counts stored in `lip_sp` for the expected counts.
+Provide the observed test statistic, the p-value, and interpret your results in the context of the problem.
+
+**Solution**
+
+```{r}
+lw = nb2listw(lip_nb, style = "W")
+N = length(lip_sf$cancer)
+y = lip_sf$cancer
+n = lip_sf$population
+r <- sum(y)/sum(n)
+rni <- r*n 
+nsim = 499
+t0 = moran(y, listw = lw, n = N, S0 = Szero(lw))$I
+tsim = numeric(nsim)
+for (i in 1:nsim) {
+  tsim[i] = moran(rpois(N, rni), listw = lw, n = N, S0 = Szero(lw))$I
+}
+(sum(tsim >= t0) + 1)/(nsim + 1)
+lw = nb2listw(lip_nb, style = "W")
+N = length(lip_sf$cancer)
+
+obs_I = moran(lip_sf$cancer, listw = lw, n = N, S0 = Szero(lw))$I
+obs_I
+moran.test(lip_sf$cancer, lw)
+
+```
+With such a low p value here we say that we reject the null in favor of strong positive spatial autocorrelation or that we at least see more cancer cases nearby other cancer cases. Thus we could say there cancer is spatially clustered. 
+
+# Problem 3
+
+Use the constant risk version of Moran’s I (Walter 1992) to test whether there is evidence of positive spatial autocorrelation for the `cancer` variable under the CRH. Use a row binary weights matrix for the `lip_nb` neighbor relationship. Use the `expected` counts stored in `lip_sp` for the expected counts. Interpret your results in the context of the problem.
+
+**Solution**
+
+
+```{r}
+lw_B <- nb2listw(lip_nb, style = "B")
+cases <- lip_sf$cancer
+E <- lip_sf$expected
+resid_crh <- (cases - E) / sqrt(E)
+
+moran.test(resid_crh, lw_B, alternative = "greater")
+
+```
+As we can see from the problem we notice that there is strong evidence against CRH with a big rejection by our p value and our observed I statistic of 6.266, where we see a sort of possitive autocorrleation with areas with high cancer counts being nearby other areas with high count. We could then say that caner risk is spatially clustered. 
+
+# Problem 4
+
+The intercentroid distances for the North Carolina data are between 4866.044 and 396,350.916. In the context of Tango’s recommended weights matrix, a very weak spatial correlation $\kappa=5000$ and a very strong spatial correlation has $\kappa=200000$. Perform Monte Carlo tests using using Tango's index with Tango's recommended weights with both $\kappa=5000$ and $\kappa=200000$ for the `cancer` variable with 499 simulated data sets. Interpret your results in the context of the problem.
+
+**Solution**
+
+
+```{r}
+lw_B <- nb2listw(lip_nb, style = "B")
+cases <- lip_sf$cancer
+E <- lip_sf$expected
+coords <- st_coordinates(st_centroid(lip_sf))
+resid_crh <- (cases - E) / sqrt(E)
+
+
+#DIDN't use North Carolina data so I will need to caluclate the KAPPAs
+D       <- as.matrix(dist(coords))   
+
+q <- quantile(D[upper.tri(D)], probs = c(.10, .25, .50, .75, .90))
+q
+kappa_local  <- - q["50%"] / log(0.10)   # weight ≈ 0.10 at median distance
+kappa_global <- - q["90%"] / log(0.30)   # weight ≈ 0.30 at 90th percentile
+kappa_local; kappa_global
+#wait super similar to the ones for upper but not lower with a lower of 47490 and upper of 193735
+
+# Tango’s exponential decay weights
+w1 <- dweights(coords, kappa = kappa_local)
+w7 <- dweights(coords, kappa = kappa_global)
+
+# Monte Carlo Tango tests
+tango_mc1 <- tango.test(cases, E, w1, nsim = 499)
+tango_mc7 <- tango.test(cases, E, w7, nsim = 499)
+
+gof <- c(tango_mc1$gof, tango_mc7$gof)
+sa <- c(tango_mc1$sa, tango_mc7$sa)
+
+par(mfrow = c(2, 2))
+
+hist(tango_mc1$gof.sim, main = "GOF (κ = 47490)",
+     xlab = "Simulated GOF", col = "lightgrey")
+abline(v = tango_mc1$gof, col = "red", lwd = 2)
+
+hist(tango_mc1$sa.sim, main = "SA (κ = 47490)",
+     xlab = "Simulated SA", col = "lightgrey")
+abline(v = tango_mc1$sa, col = "red", lwd = 2)
+
+hist(tango_mc7$gof.sim, main = "GOF (κ = 193735)",
+     xlab = "Simulated GOF", col = "lightgrey")
+abline(v = tango_mc7$gof, col = "purple", lwd = 2)
+
+hist(tango_mc7$sa.sim, main = "SA (κ = 193735)",
+     xlab = "Simulated SA", col = "lightgrey")
+abline(v = tango_mc7$sa, col = "purple", lwd = 2)
+```
+
+
+From what we see here we notice that ther is no significant evidence of spatial clustering, but this does not make sense since we found that out in the first morias test. Based off this the first two panels show us that they fall within the typtical range of our dirbituion if anything a little to the right for GOF but for SA we see that it is pretty  centered at zero. 
+
+# Problem 5
+
+Compare the goodness-of-fit and spatial autocorrelation components of Tango’s statistic for the observed and simulated data in a plot. (Do this for both values of $\kappa$). Are the patterns similar for the weak versus strong spatial autocorrelation? Or does the value of $\kappa$ dramatically impact the relative importance of the goodness-of-fit and spatial autocorrelation components?
+
+**Solution**
+
+```{r}
+
+gof_weak <- c(tango_mc1$gof.sim, tango_mc1$gof)
+sa_weak  <- c(tango_mc1$sa.sim,  tango_mc1$sa)
+
+gof_strong <- c(tango_mc7$gof.sim, tango_mc7$gof)
+sa_strong  <- c(tango_mc7$sa.sim,  tango_mc7$sa)
+
+plot(sa_weak, gof_weak, 
+     xlab = "Spatial Autocorrelation (SA)", 
+     ylab = "Goodness-of-Fit (GOF)", 
+     main = "Tango’s Statistic Components: Weak vs Strong κ",
+     xlim = c(-0.005, 0.005),   # fixed x-axis range
+     ylim = c(0, 0.010),        # fixed y-axis range
+     type = "n")
+
+# simulated points (open circles)
+points(sa_weak[-length(sa_weak)], gof_weak[-length(gof_weak)], 
+       pch = 1, col = "red")
+points(sa_strong[-length(sa_strong)], gof_strong[-length(gof_strong)], 
+       pch = 1, col = "blue")
+
+# observed Tango statistics (solid dots)
+points(tango_mc1$sa, tango_mc1$gof, pch = 19, col = "red")
+points(tango_mc7$sa, tango_mc7$gof, pch = 19, col = "blue")
+
+# legend
+legend("topright", legend = c("κ = 47,490", "κ = 193,735"), 
+       col = c("red", "blue"), pch = 19)
+
+
+```
+From this plot, we can see that the low κ value has stronger spatial correlation, which makes sense since, as we start looking at larger κ values, more distance is covered and there is less random local variation. With a small κ, we are more likely to have local clusters. Again, this small κ shows more spatial association in the similarity of proportions among regions close to each other with smaller κ, regions are closer together, and thus we get a higher SA. With large κ, we have the opposite since we are looking at larger regions, we are more likely to see clustering within those broader areas. This is kind of what we see in this dataset, except that the first κ also seems to have a very similar goodness of fit.
+
+# Problem 6
+
+In this problem you are going to implement a portion of the spatial scan method. You can only use functions/packages loaded with by default by R (`stats`, `graphics`, `grDevices`, `utils`, `datasets`, `methods`, `base`). If you don't have to load a package to access the functionality, then you should be okay.
+
+Suppose you have regional count data with the following characteristics:
+
+```{r}
+#| include: false
+region_id <- seq_len(4)
+x <- c(1, 3, 2, 0)
+y <- c(2, 1, 1.5, 2)
+cases <- c(1, 3, 3, 4)
+pop <- c(2, 4, 6, 4)
+dtf <- data.frame(region_id, x, y, cases, population = pop)
+```
+
+```{r}
+#| echo: false
+knitr::kable(dtf)
+```
+
+(`x`, `y`) define the centroid of each region.
+
+Calculate the Poisson spatial scan statistic under the CRH assuming the constraint that no more than half the total population can be in a potential cluster/window.
+
+Break up your solution into parts:
+
+## (a)
+
+Compute the inter-centroid distance matrix between all centroids.
+
+Return the sample mean of this matrix.
+
+**Solution**
+
+
+```{r}
+coords <- cbind(x,y)
+D <- as.matrix(dist(coords))
+
+mean_offdiag <- mean(D[row(D) != col(D)])
+```
+
+
+## (b)
+
+Using the distance matrix above, determine all possible windows (in terms of the region ids each window includes) in terms of nearest neighbors (the largest would have 3 non-inclusive neighbors). Print the complete list of windows.
+
+**Solution**
+
+```{r}
+all_windows <- list()
+for (i in 1:nrow(coords)) {
+  d <- D[i, ]
+  nbrs <- setdiff(order(d), i)  # nearest neighbors
+  cur <- i
+  for (k in seq_along(nbrs)) {
+    cur <- sort(c(cur, nbrs[k]))
+    all_windows[[length(all_windows) + 1]] <- cur
+  }
+}
+uniq <- unique(lapply(all_windows, function(v) paste(v, collapse = ",")))
+windows <- lapply(uniq, function(s) as.integer(strsplit(s, ",")[[1]]))
+
+
+```
+
+
+## (c)
+
+Determine the population size of each window to identify which windows have less than 50% of the total population. Print the population of each window
+
+**Solution**
+
+```{r}
+names(pop) <- region_id
+total_pop <- sum(pop)
+win_pops <- sapply(windows, function(i) sum(pop[i]))
+names(win_pops) <- sapply(windows, function(v) paste(v, collapse = "-"))
+win_pops
+
+```
+
+
+## (d)
+
+Only retain the windows that satisfy the population constraint. Print the list of retained windows.
+
+**Solution**
+
+```{r}
+retained <- windows[win_pops <= total_pop/2]
+retained
+
+```
+
+
+## (e)
+
+For each remaining window, compute $Y_{in}$, $Y_{out}$, $E_{in}$, $E_{out}$. Print a data frame/matrix with the columns $Y_{in}$, $Y_{out}$, $E_{in}$, $E_{out}$.
+
+**Solution**
+
+```{r}
+total_cases <- sum(cases)
+Ei <- total_cases * pop / total_pop
+names(Ei) <- region_id
+
+summarize_win <- function(idx) {
+  Yin  <- sum(cases[idx])
+  Ein  <- sum(Ei[idx])
+  Yout <- total_cases - Yin
+  Eout <- sum(Ei) - Ein
+  c(Y_in = Yin, Y_out = Yout, E_in = Ein, E_out = Eout)
+}
+
+res_mat <- t(sapply(retained, summarize_win))
+rownames(res_mat) <- sapply(retained, function(v) paste("{", paste(v, collapse=","), "}", sep=""))
+
+
+```
+
+
+## (f)
+
+Compute the statistic $\left(\frac{Y_{in}}{E_{in}}\right)^{Y_{in}} \left(\frac{Y_{out}}{E_{out}}\right)^{Y_{out}} I\left(\frac{Y_{in}}{E_{in}} \geq \frac{Y_{out}}{E_{out}}\right)$ for each remaining window.
+
+**Solution**
+
+
+```{r}
+scan_stat <- function(r) {
+  Yin  <- r["Y_in"];  Yout <- r["Y_out"]
+  Ein  <- r["E_in"];  Eout <- r["E_out"]
+
+  # Guard against divide-by-zero or NA
+  if (Ein == 0 || Eout == 0 || is.na(Ein) || is.na(Eout)) return(NA)
+
+  rin <- Yin / Ein
+  rout <- Yout / Eout
+
+  if (is.na(rin) || is.na(rout)) return(NA)
+
+  if (rin >= rout) {
+    (rin^Yin) * (rout^Yout)
+  } else {
+    0
+  }
+}
+stats <- apply(res_mat, 1, scan_stat)
+stats
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

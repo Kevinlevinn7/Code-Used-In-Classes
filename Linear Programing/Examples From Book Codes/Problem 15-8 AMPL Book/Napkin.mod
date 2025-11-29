@@ -1,9 +1,11 @@
 param T > 0;
-param demand  {1..T} >= 0;
+
 param buy_cost  {1..T} >= 0;
 param fast_cost >= 0; 
 param slow_cost >= 0;
+
 param init_clean >= 0;
+param demand  {1..T} >= 0;
 
 var Buy   {t in 1..T} >= 0;
 var Carry {t in 1..T} >= 0;

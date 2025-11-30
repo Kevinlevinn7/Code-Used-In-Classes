@@ -1,0 +1,58 @@
+---
+title: "Hospitals Mexico Project"
+author: "Kevin Ruiz"
+format: html
+editor: visual
+---
+
+```{r}
+library(readr)
+
+Merged_CLUES_2016 <- read_csv("Merged_CLUES_2016.csv")
+head(Merged_CLUES_2016)
+```
+
+You can add options to executable code like this
+
+```{r}
+library(sf)
+library(readxl)
+library(ggplot2)
+library(dplyr)
+unzip("mx_shp.zip", exdir = "mx_shp")
+mex_shp <- st_read("mx_shp/mx.shp")
+
+Merged_CLUES_2016_clean <- Merged_CLUES_2016 |>
+  dplyr::filter(!is.na(longitude), !is.na(latitud)) 
+
+pts_sf <- st_as_sf(Merged_CLUES_2016_clean, coords = c("longitude", "latitud"),  crs = 4326)
+
+plot(st_geometry(mex_shp), col = "white", border = "gray")
+plot(st_geometry(pts_sf), col = "red", pch = 5, add = TRUE, cex = .5, size =1)
+
+```
+
+Some exploratory graphs showing where we have a lot of our data, for example in the state of chihuahua we see a lot of our health facilities somewhat clustered in the regions near all of the big cities with little to none rural ones.
+
+```{r}
+chih_sf <- mex_shp |> 
+  filter(name == "Chihuahua")
+
+chih_pts <- pts_sf |> 
+  filter(state_code == 8)
+
+
+plot(st_geometry(chih_sf), col = "white", border = "gray")
+plot(st_geometry(chih_pts), col = "red", add = TRUE, cex = .5, size = 1)
+
+```
+
+Now for us to actually do some of the analysis I went ahead and aggregated the data by state municipality code and year. This can help us use spatial statistic methods used in regional count data which helps simplify our analysis.
+
+```{r}
+#lets load in our dataset with the aggregation done. 
+
+data <- read_csv("Recursos_Municipio_Year.csv")
+```
+
+With our data loaded in we can start by doing some basic data exploration, first lets look at the

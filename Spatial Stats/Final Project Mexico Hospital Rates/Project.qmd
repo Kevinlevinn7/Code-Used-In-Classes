@@ -53,6 +53,27 @@ Now for us to actually do some of the analysis I went ahead and aggregated the d
 #lets load in our dataset with the aggregation done. 
 
 data <- read_csv("Recursos_Municipio_Year.csv")
+pop <- read_excel("00_Republica_mexicana/1_Grupo_Quinq_00_RM.xlsx") %>%
+  clean_names()
+
 ```
 
-With our data loaded in we can start by doing some basic data exploration, first lets look at the
+With our data loaded in we can start by doing some basic data exploration.
+
+```{r}
+pop_total <- pop %>%
+  select(CLAVE, POB_TOTAL) %>%
+  rename(Year = AO) %>%
+  filter(Year > 2001, year < 2010)
+
+
+
+
+data <- data %>%
+  rename(CLAVE = State_Municipality)
+
+
+
+Hosp_pop <- data %>%
+  left_join(pop_total, by = "CLAVE")
+```

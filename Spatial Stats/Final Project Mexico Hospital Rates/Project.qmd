@@ -59,9 +59,7 @@ pop <- read_excel("00_Republica_mexicana/1_Grupo_Quinq_00_RM.xlsx")
 
 ```
 
-With our data loaded in we can start by doing some basic data exploration.
-
-rename(pop, Year = ANO)
+With our data loaded in we can start by doing some basic data exploration. First, however, lets get the population by municipality for each year.
 
 ```{r}
 
@@ -79,19 +77,15 @@ pop_total <- pop_total_by_gender %>%
 
 data_clave <- data %>%
   rename(CLAVE = State_Municipality)
-
-
+# Number of hopsitals plus a column for our population total for that year. 
 Hosp_pop <- data_clave %>%
   left_join(pop_total, by = c("CLAVE", "Year"))
 ```
 
 ```{r}
-
-
 ## Loading in our shape file for the municipaliteis goetten from government website
 
 mex_shp <- st_read("mun21gw/mun21gw.shp")
-st_crs(mex_shp)
 
 # Using SF to get centroids for the shapes
 mun_centroids <- st_centroid(mex_shp)
@@ -132,6 +126,8 @@ Hosp_pop_north <- Hosp_pop_xy %>%
 
 ```
 
+This is the Beasnag Nuell Method on the whole population of Mexico, or more specifically in regards to
+
 ```{r}
 year_of_interest <- 2010
 
@@ -156,7 +152,6 @@ bn_out <- bn.test(
 
 bn_out  
 
-library(smerc)
 
 cl_bn <- clusters(bn_out)
 
@@ -380,5 +375,120 @@ ggplot() +
     legend.position = "bottom"
   )
 
+
+```
+
+```{r}
+# Make sure CLAVE is 5-character string in your data
+Hosp_pop_north_2010 <- Hosp_pop_north_2010 %>%
+  mutate(CLAVE = sprintf("%05d", as.integer(CLAVE)))
+
+# Create full municipal ID in shapefile: SS + MMM
+mex_north_sf <- mex_north_sf %>%
+  mutate(
+    CLAVE = paste0(
+      sprintf("%02d", as.integer(CVE_ENT)),
+      sprintf("%03d", as.integer(CVE_MUN))
+    )
+  )
+
+mex_north_joined <- mex_north_sf %>%
+  left_join(
+    Hosp_pop_north_2010,
+    by = "CLAVE"
+  )
+
+library(ggplot2)
+
+ggplot(mex_north_joined) +
+  geom_sf(aes(fill = num_of_total), color = "gray40", linewidth = 0.1) +
+  scale_fill_viridis_c(option = "magma", na.value = "white") +
+  labs(
+    title = "Hospital Counts by Municipality (Northern Border States, 2010)",
+    fill = "Hospitals"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank()
+  )
+
+```
+
+```{r}
+ggplot(mex_north_joined) +
+  geom_sf(aes(fill = POB_TOTAL), color = "gray40", linewidth = 0.1) +
+  scale_fill_viridis_c(option = "plasma", na.value = "white",
+                       labels = scales::comma) +
+  labs(
+    title = "Population by Municipality (Northern Border States, 2010)",
+    fill = "Population"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank()
+  )
+
+```
+
+```{r}
+mex_north_joined <- mex_north_joined %>%
+  mutate(
+    hosp_per_10k = (num_of_total / POB_TOTAL) * 10000
+  )
+
+ggplot(mex_north_joined) +
+  geom_sf(aes(fill = hosp_per_10k), color = "gray40", linewidth = 0.1) +
+  scale_fill_viridis_c(option = "cividis", na.value = "white") +
+  labs(
+    title = "Hospitals per 10,000 Residents (Northern Border States, 2010)",
+    fill = "Hosp / 10k"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank()
+  )
+
+```
+
+```{r}
+Hosp_pop_2010 <- Hosp_pop_xy %>%
+  filter(Year == 2010) %>%
+  mutate(
+    CLAVE = sprintf("%05d", as.integer(CLAVE)),
+    hosp_per_10k = (num_of_total / POB_TOTAL) * 10000
+  )
+mex_all_sf <- mex_shp %>%
+  st_transform(4326) %>%
+  mutate(
+    CVE_ENT = sprintf("%02d", as.integer(CVE_ENT)),
+    CVE_MUN = sprintf("%03d", as.integer(CVE_MUN)),
+    CLAVE   = paste0(CVE_ENT, CVE_MUN)
+  )
+mex_all_joined <- mex_all_sf %>%
+  left_join(
+    Hosp_pop_2010,
+    by = "CLAVE"
+  )
+library(ggplot2)
+
+ggplot(mex_all_joined) +
+  geom_sf(aes(fill = hosp_per_10k), color = "gray40", linewidth = 0.05) +
+  scale_fill_viridis_c(option = "cividis", na.value = "white") +
+  labs(
+    title = "Hospitals per 10,000 Residents (Mexico, 2010)",
+    fill = "Hosp / 10k"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid  = element_blank()
+  )
 
 ```

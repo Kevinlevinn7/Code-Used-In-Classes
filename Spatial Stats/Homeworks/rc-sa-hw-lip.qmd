@@ -21,12 +21,8 @@ Lawson, A., Biggeri, A., Böhning, D., Lesaffre, E., Viel, J. F., & Bertollini, 
 We run the following command to load `lip_sf` (assuming the `.rda` is in your search path).
 
 ```{r}
+
 load("lip_sf.rda")
-
-install.packages("spdep")
-install.packages("smerc")
-
-install.packages("sf")
 ```
 
 We run the following commands to geometrically obtain centroids for each county and create a neighborhood object for the data.
@@ -259,7 +255,7 @@ Using the distance matrix above, determine all possible windows (in terms of the
 all_windows <- list()
 for (i in 1:nrow(coords)) {
   d <- D[i, ]
-  nbrs <- setdiff(order(d), i)  # nearest neighbors
+  nbrs <- setdiff(order(d), i)  
   cur <- i
   for (k in seq_along(nbrs)) {
     cur <- sort(c(cur, nbrs[k]))
@@ -340,7 +336,6 @@ scan_stat <- function(r) {
   Yin  <- r["Y_in"];  Yout <- r["Y_out"]
   Ein  <- r["E_in"];  Eout <- r["E_out"]
 
-  # Guard against divide-by-zero or NA
   if (Ein == 0 || Eout == 0 || is.na(Ein) || is.na(Eout)) return(NA)
 
   rin <- Yin / Ein

@@ -11,18 +11,18 @@ library(sf)
 library(readxl)
 library(ggplot2)
 library(dplyr)
+library(RColorBrewer)
 library(smerc)
-
-Merged_CLUES_2016 <- read_csv("Merged_CLUES_2016.csv")
-head(Merged_CLUES_2016)
 ```
 
-You can add options to executable code like this
+# Loading In Data and Pre-Processing
 
 ```{r}
-
+Merged_CLUES_2016 <- read_csv("Merged_CLUES_2016.csv")
+head(Merged_CLUES_2016)
 unzip("mx_shp.zip", exdir = "mx_shp")
 mex_shp <- st_read("mx_shp/mx.shp")
+mex_shp2 <- sf::st_read("mx_shp/mx.shp")
 
 Merged_CLUES_2016_clean <- Merged_CLUES_2016 |>
   dplyr::filter(!is.na(longitude), !is.na(latitud)) 
@@ -36,25 +36,12 @@ plot(st_geometry(pts_sf), col = "red", pch = 5, add = TRUE, cex = .5, size =1)
 
 Some exploratory graphs showing where we have a lot of our data, for example in the state of chihuahua we see a lot of our health facilities somewhat clustered in the regions near all of the big cities with little to none rural ones.
 
-```{r}
-chih_sf <- mex_shp |> 
-  filter(name == "Chihuahua")
-
-chih_pts <- pts_sf |> 
-  filter(state_code == 8)
-
-
-plot(st_geometry(chih_sf), col = "white", border = "gray")
-plot(st_geometry(chih_pts), col = "red", add = TRUE, cex = .5, size = 1)
-
-```
-
 Now for us to actually do some of the analysis I went ahead and aggregated the data by state municipality code and year. This can help us use spatial statistic methods used in regional count data which helps simplify our analysis.
 
 ```{r}
 #lets load in our dataset with the aggregation done. 
 
-data <- read_csv("Recursos_Municipio_Year.csv")
+data <- read_csv("Num_of_Clinics.csv")
 pop <- read_excel("00_Republica_mexicana/1_Grupo_Quinq_00_RM.xlsx") 
 
 ```
@@ -66,7 +53,9 @@ With our data loaded in we can start by doing some basic data exploration. First
 pop_total_by_gender <- pop %>%
   select(CLAVE, POB_TOTAL, ANO) %>%
   rename(Year = ANO) %>%
-  filter(Year > 2000, Year < 2011)
+  filter(Year == 2025)
+
+#Getting our actual poulation total
 
 pop_total <- pop_total_by_gender %>%
   group_by(CLAVE, Year) %>%
@@ -75,11 +64,13 @@ pop_total <- pop_total_by_gender %>%
     .groups = "drop"
   )
 
+# Doing a rename so that we can combine the data
 data_clave <- data %>%
   rename(CLAVE = State_Municipality)
+
 # Number of hopsitals plus a column for our population total for that year. 
 Hosp_pop <- data_clave %>%
-  left_join(pop_total, by = c("CLAVE", "Year"))
+  left_join(pop_total, by = c("CLAVE"))
 ```
 
 ```{r}
@@ -111,34 +102,44 @@ mun_xy <- mun_centroids %>%
 
 # This is all of the municiplaites
 Hosp_pop_xy <- Hosp_pop %>%
-  left_join(mun_xy, by = "CLAVE") 
+  left_join(mun_xy, by = "CLAVE") %>%
+  filter(!is.na(POB_TOTAL))
 
 
 # With this we are only looking at the municiplaites in the northern part of mexico
 north_states <- c("02", "05", "08", "19", "26", "28")
+
 Hosp_pop_north <- Hosp_pop_xy %>%
   left_join(mun_xy, by = "CLAVE") %>%
   mutate(CLAVE = sprintf("%05d", as.integer(CLAVE))) %>%
   mutate(state_code = substr(CLAVE, 1, 2)) %>%
-  filter(state_code %in% north_states)
+  filter(state_code %in% north_states) 
 
 
 
 ```
 
-This is the Beasnag Nuell Method on the whole population of Mexico, or more specifically in regards to
+# National Analysis
+
+## Setting Our Data sets
 
 ```{r}
-year_of_interest <- 2010
-
-Hosp_pop_xy_2010 <-  Hosp_pop_xy %>% filter(Year == year_of_interest)
-
-coords <- as.matrix(Hosp_pop_xy_2010[, c("lon", "lat")])
-cases  <- Hosp_pop_xy_2010$num_of_total
-pop    <- Hosp_pop_xy_2010$POB_TOTAL
+coords <- as.matrix(Hosp_pop_xy[, c("lon", "lat")])
+cases  <- Hosp_pop_xy$num_of_total
+pop    <- Hosp_pop_xy$POB_TOTAL
 ex     <- sum(cases) / sum(pop) * pop  
+```
 
-cstar <- 12  # e.g., windows that contain 5 hospitals
+## Besag and Newell Method
+
+This is the Besag Newell Method on the whole population of Mexico.
+
+Ho: The most compact window regarding population with at least c\* hospitals is not significantly more compact than what is expected under the constant risk hypothesis
+
+Ha: The most compact window regarding population with at least c\* hospitals is significantly more compact than what is expected under the constant risk hypothesis
+
+```{r}
+cstar <- 5
 
 bn_out <- bn.test(
   coords = coords,
@@ -155,100 +156,182 @@ bn_out
 
 cl_bn <- clusters(bn_out)
 
-str(cl_bn)
-
 cl_bn$location$idx
 
-Hosp_pop_xy_2010$bn_cluster <- "None"
+Hosp_pop_xy$bn_cluster <- "None"
 
-Hosp_pop_xy_2010$bn_cluster[cl_bn$location$idx] <- "High hospital density"
+Hosp_pop_xy$bn_cluster[cl_bn$location$idx] <- "High hospital density"
+```
 
-library(ggplot2)
+Lets plot the B_N Method
 
+```{r}
 ggplot(Hosp_pop_xy_2010, aes(x = lon, y = lat)) +
   geom_point(aes(color = bn_cluster), size = 1.4, alpha = 0.85) +
-  scale_color_manual(values = c(
-    "None" = "gray80",
-    "High hospital density" = "#d73027"
-  )) +
+  scale_color_viridis_d(
+    option = "C",
+    name = "BN Cluster"
+  ) +
   coord_fixed() +
   labs(
     title = "Besag–Newell Cluster of Hospital Supply (2010)",
     subtitle = paste0("c* = ", cstar, " hospitals"),
     x = "Longitude",
-    y = "Latitude",
-    color = "BN Cluster"
+    y = "Latitude"
   ) +
   theme_minimal(base_size = 13) +
   theme(
     panel.grid = element_blank(),
     legend.position = "bottom"
   )
+dd
+```
+
+## Data Exploration Per Capita Hospital and Diff
+
+Finding the average per capita hospital and the difference
+
+```{r}
+Hosp_pop_xy <- Hosp_pop_xy |>
+  mutate(
+    hosp_per_10k = (num_of_total / POB_TOTAL) * 10000
+  )
+
+avg_rate <- mean(Hosp_pop_xy$hosp_per_10k, na.rm = TRUE)
+
+Hosp_pop_xy <- Hosp_pop_xy |>
+  mutate(
+    deviation_from_avg_rate = hosp_per_10k - avg_rate
+  )
+mex_shp <- mex_shp %>%
+  mutate(
+    CVE_ENT_num = as.numeric(as.character(CVE_ENT)),
+    CVE_MUN_num = as.numeric(as.character(CVE_MUN)),
+    CLAVE = CVE_ENT_num * 1000 + CVE_MUN_num)
+
+mex_map_dev <- mex_shp |>
+  left_join(Hosp_pop_xy, by = "CLAVE")
 
 
 ```
 
+The difference plotted in ggplot
+
 ```{r}
-Hosp_pop_xy_2010$expected_hosp <- sum(Hosp_pop_xy_2010$num_of_total) /
-                                  sum(Hosp_pop_xy_2010$POB_TOTAL) *
-                                  Hosp_pop_xy_2010$POB_TOTAL
-
-Hosp_pop_xy_2010$shortage <- Hosp_pop_xy_2010$expected_hosp -
-                             Hosp_pop_xy_2010$num_of_total
-
-Hosp_pop_xy_2010$shortage[Hosp_pop_xy_2010$shortage < 0] <- 0
-
-ggplot(Hosp_pop_xy_2010, aes(x = lon, y = lat)) +
-  geom_point(aes(color = shortage), size = 1.5) +
-  scale_color_viridis_c(option = "magma") +
-  coord_fixed() +
+ggplot(mex_map_dev) +
+  geom_sf(aes(fill = deviation_from_avg_rate), color = NA) +
+  scale_fill_viridis_c(
+    option = "D",   # diverging viridis
+    direction = 1,
+    name = "Deviation\n(per 10k)"
+  ) +
   labs(
-    title = "Hospital Shortage Index (2010)",
-    subtitle = "Expected − Observed Hospitals",
-    x = "Longitude",
-    y = "Latitude",
-    color = "Shortage"
+    title = "Hospital Access Deviation from National Average (2010)",
+    subtitle = "Hospitals per 10,000 − National Mean"
   ) +
   theme_minimal()
 
-```
-
-```{r}
-nstar <- 100000  # total population in each CEPP window (tune this!)
-
-cepp_out <- cepp.test(
-  coords = coords,
-  cases  = cases,
-  pop    = pop,
-  nstar  = nstar,
-  nsim   = 499,
-  alpha  = 0.05,
-  longlat = FALSE
-)
-
-cepp_out
-summary(cepp_out)
-plot(cepp_out)
 
 ```
 
+## Cluster Evaluation Permutation Procedure (CEEP)
+
+Ho: There is no window with n\* persons that has significantly more clinics than what is expected under the CRH
+
+Ha: There is at least one window with n\* persons that has significantly more clinics than what is expected under the CRH
+
 ```{r}
+
+N <- sum(pop, na.rm = TRUE)
+
+nstar_vec <- c(0.01, 0.03, 0.05) * N
+nstar_vec
+
+
+cepp_list_01 <-cepp.test(
+    coords = coords,
+    cases  = cases,
+    pop    = pop,
+    nstar  = nstar_vec[1],
+    nsim   = 499,
+    alpha  = 0.05,
+    longlat = T
+  )
+cepp_list_03 <-cepp.test(
+    coords = coords,
+    cases  = cases,
+    pop    = pop,
+    nstar  = nstar_vec[2],
+    nsim   = 499,
+    alpha  = 0.05,
+    longlat = T
+  )
+cepp_list_05 <-cepp.test(
+    coords = coords,
+    cases  = cases,
+    pop    = pop,
+    nstar  = nstar_vec[3],
+    nsim   = 499,
+    alpha  = 0.05,
+    longlat = T
+  )
+
+
+
+```
+
+Lets go ahead and plot the CEEP method
+
+```{r}
+
+plot(sf::st_geometry(mex_shp), border = "white", axes = TRUE,
+     col = color.clusters(cepp_list_01))
+legend("topright", legend = c("n* = 1333611"))
+
+plot(sf::st_geometry(mex_shp), border = "white", axes = TRUE,
+     col = color.clusters(cepp_list_03))
+legend("topright", legend = c("n* = 4000833"))
+
+plot(sf::st_geometry(mex_shp), border = "white", axes = TRUE,
+     col = color.clusters(cepp_list_05))
+legend("topright", legend = c("n* = 6668055"))
+
+
+```
+
+## Scan Test
+
+```{r}
+e = sum(cases)/sum(pop) * pop
 scan_out <- scan.test(
   coords = coords,
   cases  = cases,
   pop    = pop,
   nsim   = 499,
   alpha  = 0.05,
-  ubpop  = 0.5,       # max fraction of total population allowed in a cluster
-  longlat = FALSE,
-  type   = "poisson"  # counts with population offset
+  ex = e,
+  longlat = T
 )
 
-scan_out
-plot(scan_out, idx = 1:3)      # first 3 clusters
-clusters(scan_out)             # extract cluster membership, RR, etc.
+k <- length(scan_out$clusters)
+mycol <- grDevices::hcl.colors(k)
 
+plot(
+  sf::st_geometry(mex_shp),
+  border = "grey60",
+  axes   = TRUE,
+  col    = color.clusters(scan_out , col = mycol)
+)
+
+legend(
+  "topright",
+  legend = paste("Cluster", seq_len(k)),
+  lwd = 8,
+  col = mycol
+)
 ```
+
+## Tango's Test
 
 ```{r}
 coords <- as.matrix(df_year[, c("x", "y")])
@@ -301,84 +384,30 @@ for (yy in years) {
 
 ```
 
-Now this is the analysis only for the northen states
+# Northen States Analsysis
+
+## Northen States Plots
 
 ```{r}
-Hosp_pop_north_2010 <- Hosp_pop_north %>%
-  filter(Year == 2010)
-table(Hosp_pop_north_2010$state_code)
+states_names <- c("Baja California", "Chiapas", "Chihuahua", 
+                  "Nuevo León", "Sonora", "Tamaulipas")
 
-coords <- as.matrix(Hosp_pop_north_2010[, c("lon.x", "lat.x")])
-cases  <- Hosp_pop_north_2010$num_of_total
-pop    <- Hosp_pop_north_2010$POB_TOTAL
+states_codes <- c(2,5,8,19,26,28)
 
-scan_out_north <- scan.test(
-  coords = coords,
-  cases  = cases,
-  pop    = pop,
-  nsim   = 499,
-  alpha  = 0.05,
-  ubpop  = 0.25,     # cluster can include up to 25% of total pop
-  longlat = FALSE,
-  type   = "poisson"
-)
+CVE_ENT_North <- c("02", "05", "08", "19", "26", "28")
 
-scan_out_north
-cl_scan <- clusters(scan_out_north)
+state_sf <- mex_shp |> 
+  filter(CVE_ENT %in% CVE_ENT_North)
 
-Hosp_pop_north_2010$scan_cluster <- "None"
-Hosp_pop_north_2010$scan_cluster[cl_scan$location$idx] <- "High hospital density"
-library(ggplot2)
+states_pts <- pts_sf |> 
+  filter(state_code %in% states_codes)
 
-
-
+plot(st_geometry(chih_sf), col = "white", border = "gray")
+plot(st_geometry(chih_pts), col = "red", add = TRUE, cex = 0.5)
 ```
 
 ```{r}
-library(sf)
-library(rnaturalearth)
-library(ggplot2)
 
-mex_states <- st_transform(mex_shp, 4326)  # make sure it's lon/lat
-mex_north_sf <- mex_states %>%
-  filter(CVE_ENT %in% c("02", "05", "08", "19", "26", "28"))
-
-
-ggplot() +
-  geom_sf(
-    data = mex_north_sf,
-    fill = "white",
-    color = "black",
-    linewidth = 0.4
-  ) +
-  geom_point(
-    data = Hosp_pop_north_2010,
-    aes(x = lon.x, y = lat.x, color = scan_cluster),
-    size = 1.5,
-    alpha = 0.9
-  ) +
-  scale_color_manual(values = c(
-    "None" = "gray70",
-    "High hospital density" = "#d73027"
-  )) +
-  coord_sf() +
-  labs(
-    title = "Hospital Supply Clusters in Northern Border States (2010)",
-    subtitle = "Kulldorff spatial scan with state boundaries",
-    x = "Longitude",
-    y = "Latitude",
-    color = "Cluster"
-  ) +
-  theme_minimal(base_size = 13) +
-  theme(
-    panel.grid = element_blank(),
-    legend.position = "bottom"
-  )
-
-
-```
-
-```{r}
 # Make sure CLAVE is 5-character string in your data
 Hosp_pop_north_2010 <- Hosp_pop_north_2010 %>%
   mutate(CLAVE = sprintf("%05d", as.integer(CLAVE)))
@@ -398,7 +427,7 @@ mex_north_joined <- mex_north_sf %>%
     by = "CLAVE"
   )
 
-library(ggplot2)
+
 
 ggplot(mex_north_joined) +
   geom_sf(aes(fill = num_of_total), color = "gray40", linewidth = 0.1) +
@@ -417,6 +446,7 @@ ggplot(mex_north_joined) +
 ```
 
 ```{r}
+
 ggplot(mex_north_joined) +
   geom_sf(aes(fill = POB_TOTAL), color = "gray40", linewidth = 0.1) +
   scale_fill_viridis_c(option = "plasma", na.value = "white",
@@ -431,7 +461,6 @@ ggplot(mex_north_joined) +
     axis.title = element_blank(),
     panel.grid = element_blank()
   )
-
 ```
 
 ```{r}
@@ -444,7 +473,7 @@ ggplot(mex_north_joined) +
   geom_sf(aes(fill = hosp_per_10k), color = "gray40", linewidth = 0.1) +
   scale_fill_viridis_c(option = "cividis", na.value = "white") +
   labs(
-    title = "Hospitals per 10,000 Residents (Northern Border States, 2010)",
+    title = "Hospitals per 10,000 Residents (Northern Border States, 2025)",
     fill = "Hosp / 10k"
   ) +
   theme_minimal(base_size = 13) +
@@ -456,9 +485,255 @@ ggplot(mex_north_joined) +
 
 ```
 
+## Setting Our Data sets Northen States
+
+Let's first create our typical cords, cases, population, and our expected risk under CRH
+
+```{r}
+coords_n <- as.matrix(Hosp_pop_north[, c("lon.x", "lat.x")])
+cases_n  <- Hosp_pop_north$num_of_total
+pop_n    <- Hosp_pop_north$POB_TOTAL
+#CRH expected value
+ex_n     <- sum(cases) / sum(pop) * pop  
+```
+
+## Besag and Newell Approach Northern States
+
+Ho: The most compact window regarding population with at least c\* hospitals in the border U.S. Mexico is not significantly more compact than what is expected under the constant risk hypothesis
+
+Ha: The most compact window regarding population with at least c\* hospitals in the border U.S. Mexico is significantly more compact than what is expected under the constant risk hypothesis
+
+```{r}
+
+summary(cases_n)
+quantile(cases_n, probs = c(0.5, 0.75, 0.9))
+# I choose mean, 50th, 75th, 90th, 
+cstars_n <- c(10.5,  28, 33.32, 68.3)
+
+bn_out_n_10_5 <- bn.test(
+  coords = coords_n,
+  cases  = cases_n,
+  pop    = pop_n,
+  cstar  = cstars_n[1],
+  alpha  = 0.05,
+  longlat = T,
+  modified = FALSE
+)
+
+bn_out_n_28 <- bn.test(
+  coords = coords_n,
+  cases  = cases_n,
+  pop    = pop_n,
+  cstar  = cstars_n[2],
+  alpha  = 0.05,
+  longlat = T,
+  modified = FALSE
+)
+
+bn_out_n_33_32 <- bn.test(
+  coords = coords_n,
+  cases  = cases_n,
+  pop    = pop_n,
+  cstar  = cstars_n[3],
+  alpha  = 0.05,
+  longlat = T,
+  modified = FALSE
+)
+
+bn_out_n_68_3 <- bn.test(
+  coords = coords_n,
+  cases  = cases_n,
+  pop    = pop_n,
+  cstar  = cstars_n[4],
+  alpha  = 0.05,
+  longlat = T,
+  modified = FALSE
+)
+
+```
+
+Now lets go ahead an plot
+
+```{r}
+mycol = brewer.pal(4, "Dark2")
+
+# default is white (no clustering)
+ncol = rep("white", nrow(mex_north_joined))
+# cstar = 10.5
+ncol[bn_out_n_10_5$clusters[[1]]$locids] = mycol[2]
+
+# cstar = 28
+ncol[bn_out_n_28$clusters[[1]]$locids] = mycol[1]
+
+# cstar = 33.32
+ncol[bn_out_n_33_32$clusters[[1]]$locids] = mycol[4]
+
+# cstar = 68.3
+ncol[bn_out_n_68_3$clusters[[1]]$locids] = mycol[3]
+
+plot(sf::st_geometry(mex_north_joined),
+     border = "grey60",
+     axes   = TRUE,
+     col    = ncol)
+
+legend("topright",
+       legend = c("Cluster c* = 28",
+                  "Cluster c* = 10.5",
+                  "Cluster c* = 68.3",
+                  "Cluster c* = 33.32"),
+       lwd = 10,
+       col = mycol)
+bn_out_n_10_5$clusters[[1]][c("cases", "population", "pvalue")]
+bn_out_n_28$clusters[[1]][c("cases", "population", "pvalue")]
+bn_out_n_33_32$clusters[[1]][c("cases", "population", "pvalue")]
+bn_out_n_68_3$clusters[[1]][c("cases", "population", "pvalue")]
+
+```
+
+## Cluster Evaluation Permutation Procedure Northern  States
+
+Ho: There is no window with n\* persons that has significantly more clinics in the U.S. Mexico border states than what is expected under the CRH
+
+Ha: There is at least one window with n\* persons that has significantly more clinicsin the U.S. Mexico border states than what is expected under the CRH
+
+Now lets actually run the CEPP Model
+
+```{r}
+N <- sum(pop_n, na.rm = TRUE)
+
+nstar_vec_n <- c(0.01, 0.03, 0.05) * N
+nstar_vec_n
+
+
+cepp_list_01_n <-cepp.test(
+    coords = coords_n,
+    cases  = cases_n,
+    pop    = pop_n,
+    nstar  = nstar_vec_n[1],
+    nsim   = 499,
+    alpha  = 0.05,
+    longlat = T
+  )
+cepp_list_03_n <-cepp.test(
+    coords = coords_n,
+    cases  = cases_n,
+    pop    = pop_n,
+    nstar  = nstar_vec_n[2],
+    nsim   = 499,
+    alpha  = 0.05,
+    longlat = T
+  )
+cepp_list_05_n <-cepp.test(
+    coords = coords_n,
+    cases  = cases_n,
+    pop    = pop_n,
+    nstar  = nstar_vec_n[3],
+    nsim   = 499,
+    alpha  = 0.05,
+    longlat = T
+  )
+
+
+```
+
+Lets go ahead and plot our tests
+
+```{r}
+
+plot(sf::st_geometry(mex_north_joined), border = "white", axes = TRUE,
+     col = color.clusters(cepp_list_01_n))
+legend("topright", legend = c("n* = 248773.1"))
+
+plot(sf::st_geometry(mex_north_joined), border = "white", axes = TRUE,
+     col = color.clusters(cepp_list_03_n))
+legend("topright", legend = c("n* = 746319.3"))
+
+plot(sf::st_geometry(mex_north_joined), border = "white", axes = TRUE,
+     col = color.clusters(cepp_list_05_n))
+legend("topright", legend = c("n* = 1243865.5"))
+
+```
+
+## Scan Test (Kulldorff Scan)
+
+```{r}
+e = sum(cases_n)/sum(pop_n) * pop_n
+scan_out_north <- scan.test(
+  coords = coords_n,
+  cases  = cases_n,
+  pop    = pop_n,
+  nsim   = 499,
+  alpha  = 0.05,
+  ex = e,
+  longlat = T
+)
+
+k <- length(scan_out_north$clusters)
+mycol <- grDevices::hcl.colors(k)
+
+plot(
+  sf::st_geometry(mex_north_joined),
+  border = "grey60",
+  axes   = TRUE,
+  col    = color.clusters(scan_out_north, col = mycol)
+)
+
+legend(
+  "topright",
+  legend = paste("Cluster", seq_len(k)),
+  lwd = 8,
+  col = mycol
+)
+```
+
+Now lets extract the exact municipalities where they're are clusters
+
+```{r}
+
+idx1 <- scan_out_north$clusters[[1]]
+idx1 <- idx1$locids
+
+
+mex_north_joined$NOM_MUN[idx1]
+```
+
+```{r}
+cluster_rows_df <- mex_north_joined[idx1, ] |>
+  sf::st_drop_geometry() |>
+  mutate(
+    border_us = ifelse(NOM_MUN %in% c("Manuel Benavides", "Matamoros", "Nogales", "Janos"),
+                       "Yes", "No")
+  ) |>
+  select(NOM_MUN, CVE_ENT, border_us)
+```
+
+```{r}
+idx1 <- scan_sum$iidx[[1]]
+
+cluster_col <- rep("white", nrow(mex_north_joined))
+cluster_col[idx1] <- "red"
+
+plot(sf::st_geometry(mex_north_joined),
+     border = "grey85",      # soften background borders
+     axes   = TRUE,
+     col    = cluster_col)
+
+# Thicken ONLY the cluster border
+plot(sf::st_geometry(mex_north_joined)[idx1],
+     add = TRUE,
+     border = "black",
+     lwd = 2.5)
+
+legend("topright",
+       legend = "Primary Scan Cluster",
+       lwd = 10,
+       col = "red")
+
+```
+
 ```{r}
 Hosp_pop_2010 <- Hosp_pop_xy %>%
-  filter(Year == 2010) %>%
+  filter(Year == 2025) %>%
   mutate(
     CLAVE = sprintf("%05d", as.integer(CLAVE)),
     hosp_per_10k = (num_of_total / POB_TOTAL) * 10000

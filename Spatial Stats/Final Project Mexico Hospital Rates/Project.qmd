@@ -7,6 +7,11 @@ editor: visual
 
 ```{r}
 library(readr)
+library(sf)
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(smerc)
 
 Merged_CLUES_2016 <- read_csv("Merged_CLUES_2016.csv")
 head(Merged_CLUES_2016)
@@ -15,10 +20,7 @@ head(Merged_CLUES_2016)
 You can add options to executable code like this
 
 ```{r}
-library(sf)
-library(readxl)
-library(ggplot2)
-library(dplyr)
+
 unzip("mx_shp.zip", exdir = "mx_shp")
 mex_shp <- st_read("mx_shp/mx.shp")
 
@@ -53,27 +55,440 @@ Now for us to actually do some of the analysis I went ahead and aggregated the d
 #lets load in our dataset with the aggregation done. 
 
 data <- read_csv("Recursos_Municipio_Year.csv")
-pop <- read_excel("00_Republica_mexicana/1_Grupo_Quinq_00_RM.xlsx") %>%
-  clean_names()
+pop <- read_excel("00_Republica_mexicana/1_Grupo_Quinq_00_RM.xlsx") 
 
 ```
 
-With our data loaded in we can start by doing some basic data exploration.
+With our data loaded in we can start by doing some basic data exploration. First, however, lets get the population by municipality for each year.
 
 ```{r}
-pop_total <- pop %>%
-  select(CLAVE, POB_TOTAL) %>%
-  rename(Year = AO) %>%
-  filter(Year > 2001, year < 2010)
 
+pop_total_by_gender <- pop %>%
+  select(CLAVE, POB_TOTAL, ANO) %>%
+  rename(Year = ANO) %>%
+  filter(Year > 2000, Year < 2011)
 
+pop_total <- pop_total_by_gender %>%
+  group_by(CLAVE, Year) %>%
+  summarise(
+    POB_TOTAL = sum(POB_TOTAL, na.rm = T),
+    .groups = "drop"
+  )
 
-
-data <- data %>%
+data_clave <- data %>%
   rename(CLAVE = State_Municipality)
+# Number of hopsitals plus a column for our population total for that year. 
+Hosp_pop <- data_clave %>%
+  left_join(pop_total, by = c("CLAVE", "Year"))
+```
+
+```{r}
+## Loading in our shape file for the municipaliteis goetten from government website
+
+mex_shp <- st_read("mun21gw/mun21gw.shp")
+
+# Using SF to get centroids for the shapes
+mun_centroids <- st_centroid(mex_shp)
+
+# Getting Centroid coords
+coords <- st_coordinates(mun_centroids)
+
+# Making the CLAVE match up as well as extracting our coordinates
+mun_centroids <- mun_centroids %>%
+  mutate(
+    CVE_ENT = as.numeric(CVE_ENT),
+    CVE_MUN = as.numeric(CVE_MUN),
+    CLAVE = CVE_ENT * 1000 + CVE_MUN,
+    lon = coords[,1],
+    lat = coords[,2]
+  )
+
+# Having our coords 
+names(mun_centroids)
+mun_xy <- mun_centroids %>%
+  st_drop_geometry() %>%
+  select(CLAVE, lon, lat)
+
+# This is all of the municiplaites
+Hosp_pop_xy <- Hosp_pop %>%
+  left_join(mun_xy, by = "CLAVE") 
+
+
+# With this we are only looking at the municiplaites in the northern part of mexico
+north_states <- c("02", "05", "08", "19", "26", "28")
+Hosp_pop_north <- Hosp_pop_xy %>%
+  left_join(mun_xy, by = "CLAVE") %>%
+  mutate(CLAVE = sprintf("%05d", as.integer(CLAVE))) %>%
+  mutate(state_code = substr(CLAVE, 1, 2)) %>%
+  filter(state_code %in% north_states)
 
 
 
-Hosp_pop <- data %>%
-  left_join(pop_total, by = "CLAVE")
+```
+
+This is the Beasnag Nuell Method on the whole population of Mexico, or more specifically in regards to
+
+```{r}
+year_of_interest <- 2010
+
+Hosp_pop_xy_2010 <-  Hosp_pop_xy %>% filter(Year == year_of_interest)
+
+coords <- as.matrix(Hosp_pop_xy_2010[, c("lon", "lat")])
+cases  <- Hosp_pop_xy_2010$num_of_total
+pop    <- Hosp_pop_xy_2010$POB_TOTAL
+ex     <- sum(cases) / sum(pop) * pop  
+
+cstar <- 12  # e.g., windows that contain 5 hospitals
+
+bn_out <- bn.test(
+  coords = coords,
+  cases  = cases,
+  pop    = pop,
+  cstar  = cstar,
+  alpha  = 0.05,
+  longlat = FALSE,
+  modified = FALSE
+)
+
+bn_out  
+
+
+cl_bn <- clusters(bn_out)
+
+str(cl_bn)
+
+cl_bn$location$idx
+
+Hosp_pop_xy_2010$bn_cluster <- "None"
+
+Hosp_pop_xy_2010$bn_cluster[cl_bn$location$idx] <- "High hospital density"
+
+library(ggplot2)
+
+ggplot(Hosp_pop_xy_2010, aes(x = lon, y = lat)) +
+  geom_point(aes(color = bn_cluster), size = 1.4, alpha = 0.85) +
+  scale_color_manual(values = c(
+    "None" = "gray80",
+    "High hospital density" = "#d73027"
+  )) +
+  coord_fixed() +
+  labs(
+    title = "Besag–Newell Cluster of Hospital Supply (2010)",
+    subtitle = paste0("c* = ", cstar, " hospitals"),
+    x = "Longitude",
+    y = "Latitude",
+    color = "BN Cluster"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    panel.grid = element_blank(),
+    legend.position = "bottom"
+  )
+
+
+```
+
+```{r}
+Hosp_pop_xy_2010$expected_hosp <- sum(Hosp_pop_xy_2010$num_of_total) /
+                                  sum(Hosp_pop_xy_2010$POB_TOTAL) *
+                                  Hosp_pop_xy_2010$POB_TOTAL
+
+Hosp_pop_xy_2010$shortage <- Hosp_pop_xy_2010$expected_hosp -
+                             Hosp_pop_xy_2010$num_of_total
+
+Hosp_pop_xy_2010$shortage[Hosp_pop_xy_2010$shortage < 0] <- 0
+
+ggplot(Hosp_pop_xy_2010, aes(x = lon, y = lat)) +
+  geom_point(aes(color = shortage), size = 1.5) +
+  scale_color_viridis_c(option = "magma") +
+  coord_fixed() +
+  labs(
+    title = "Hospital Shortage Index (2010)",
+    subtitle = "Expected − Observed Hospitals",
+    x = "Longitude",
+    y = "Latitude",
+    color = "Shortage"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+nstar <- 100000  # total population in each CEPP window (tune this!)
+
+cepp_out <- cepp.test(
+  coords = coords,
+  cases  = cases,
+  pop    = pop,
+  nstar  = nstar,
+  nsim   = 499,
+  alpha  = 0.05,
+  longlat = FALSE
+)
+
+cepp_out
+summary(cepp_out)
+plot(cepp_out)
+
+```
+
+```{r}
+scan_out <- scan.test(
+  coords = coords,
+  cases  = cases,
+  pop    = pop,
+  nsim   = 499,
+  alpha  = 0.05,
+  ubpop  = 0.5,       # max fraction of total population allowed in a cluster
+  longlat = FALSE,
+  type   = "poisson"  # counts with population offset
+)
+
+scan_out
+plot(scan_out, idx = 1:3)      # first 3 clusters
+clusters(scan_out)             # extract cluster membership, RR, etc.
+
+```
+
+```{r}
+coords <- as.matrix(df_year[, c("x", "y")])
+w      <- dweights(coords, kappa = 1)  # distance-based weights
+
+tango_out <- tango.test(
+  cases = cases,
+  pop   = pop,
+  w     = w,
+  nsim  = 499    # Monte Carlo p-value
+)
+
+tango_out
+plot(tango_out)
+
+```
+
+```{r}
+years <- sort(unique(Hosp_pop_xy$Year))
+
+results_scan  <- list()
+results_tango <- list()
+
+for (yy in years) {
+  this <- Hosp_pop_xy %>% filter(Year == yy)
+
+  coords <- as.matrix(this[, c("lon", "lat")])
+  cases  <- this$num_of_total
+  pop    <- this$POB_TOTAL
+
+  # scan
+  results_scan[[as.character(yy)]] <- scan.test(
+    coords = coords,
+    cases  = cases,
+    pop    = pop,
+    nsim   = 199,
+    alpha  = 0.05,
+    ubpop  = 0.5
+  )
+
+  # tango
+  w <- dweights(coords, kappa = 1)
+  results_tango[[as.character(yy)]] <- tango.test(
+    cases = cases,
+    pop   = pop,
+    w     = w,
+    nsim  = 199
+  )
+}
+
+```
+
+Now this is the analysis only for the northen states
+
+```{r}
+Hosp_pop_north_2010 <- Hosp_pop_north %>%
+  filter(Year == 2010)
+table(Hosp_pop_north_2010$state_code)
+
+coords <- as.matrix(Hosp_pop_north_2010[, c("lon.x", "lat.x")])
+cases  <- Hosp_pop_north_2010$num_of_total
+pop    <- Hosp_pop_north_2010$POB_TOTAL
+
+scan_out_north <- scan.test(
+  coords = coords,
+  cases  = cases,
+  pop    = pop,
+  nsim   = 499,
+  alpha  = 0.05,
+  ubpop  = 0.25,     # cluster can include up to 25% of total pop
+  longlat = FALSE,
+  type   = "poisson"
+)
+
+scan_out_north
+cl_scan <- clusters(scan_out_north)
+
+Hosp_pop_north_2010$scan_cluster <- "None"
+Hosp_pop_north_2010$scan_cluster[cl_scan$location$idx] <- "High hospital density"
+library(ggplot2)
+
+
+
+```
+
+```{r}
+library(sf)
+library(rnaturalearth)
+library(ggplot2)
+
+mex_states <- st_transform(mex_shp, 4326)  # make sure it's lon/lat
+mex_north_sf <- mex_states %>%
+  filter(CVE_ENT %in% c("02", "05", "08", "19", "26", "28"))
+
+
+ggplot() +
+  geom_sf(
+    data = mex_north_sf,
+    fill = "white",
+    color = "black",
+    linewidth = 0.4
+  ) +
+  geom_point(
+    data = Hosp_pop_north_2010,
+    aes(x = lon.x, y = lat.x, color = scan_cluster),
+    size = 1.5,
+    alpha = 0.9
+  ) +
+  scale_color_manual(values = c(
+    "None" = "gray70",
+    "High hospital density" = "#d73027"
+  )) +
+  coord_sf() +
+  labs(
+    title = "Hospital Supply Clusters in Northern Border States (2010)",
+    subtitle = "Kulldorff spatial scan with state boundaries",
+    x = "Longitude",
+    y = "Latitude",
+    color = "Cluster"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    panel.grid = element_blank(),
+    legend.position = "bottom"
+  )
+
+
+```
+
+```{r}
+# Make sure CLAVE is 5-character string in your data
+Hosp_pop_north_2010 <- Hosp_pop_north_2010 %>%
+  mutate(CLAVE = sprintf("%05d", as.integer(CLAVE)))
+
+# Create full municipal ID in shapefile: SS + MMM
+mex_north_sf <- mex_north_sf %>%
+  mutate(
+    CLAVE = paste0(
+      sprintf("%02d", as.integer(CVE_ENT)),
+      sprintf("%03d", as.integer(CVE_MUN))
+    )
+  )
+
+mex_north_joined <- mex_north_sf %>%
+  left_join(
+    Hosp_pop_north_2010,
+    by = "CLAVE"
+  )
+
+library(ggplot2)
+
+ggplot(mex_north_joined) +
+  geom_sf(aes(fill = num_of_total), color = "gray40", linewidth = 0.1) +
+  scale_fill_viridis_c(option = "magma", na.value = "white") +
+  labs(
+    title = "Hospital Counts by Municipality (Northern Border States, 2010)",
+    fill = "Hospitals"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank()
+  )
+
+```
+
+```{r}
+ggplot(mex_north_joined) +
+  geom_sf(aes(fill = POB_TOTAL), color = "gray40", linewidth = 0.1) +
+  scale_fill_viridis_c(option = "plasma", na.value = "white",
+                       labels = scales::comma) +
+  labs(
+    title = "Population by Municipality (Northern Border States, 2010)",
+    fill = "Population"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank()
+  )
+
+```
+
+```{r}
+mex_north_joined <- mex_north_joined %>%
+  mutate(
+    hosp_per_10k = (num_of_total / POB_TOTAL) * 10000
+  )
+
+ggplot(mex_north_joined) +
+  geom_sf(aes(fill = hosp_per_10k), color = "gray40", linewidth = 0.1) +
+  scale_fill_viridis_c(option = "cividis", na.value = "white") +
+  labs(
+    title = "Hospitals per 10,000 Residents (Northern Border States, 2010)",
+    fill = "Hosp / 10k"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank()
+  )
+
+```
+
+```{r}
+Hosp_pop_2010 <- Hosp_pop_xy %>%
+  filter(Year == 2010) %>%
+  mutate(
+    CLAVE = sprintf("%05d", as.integer(CLAVE)),
+    hosp_per_10k = (num_of_total / POB_TOTAL) * 10000
+  )
+mex_all_sf <- mex_shp %>%
+  st_transform(4326) %>%
+  mutate(
+    CVE_ENT = sprintf("%02d", as.integer(CVE_ENT)),
+    CVE_MUN = sprintf("%03d", as.integer(CVE_MUN)),
+    CLAVE   = paste0(CVE_ENT, CVE_MUN)
+  )
+mex_all_joined <- mex_all_sf %>%
+  left_join(
+    Hosp_pop_2010,
+    by = "CLAVE"
+  )
+library(ggplot2)
+
+ggplot(mex_all_joined) +
+  geom_sf(aes(fill = hosp_per_10k), color = "gray40", linewidth = 0.05) +
+  scale_fill_viridis_c(option = "cividis", na.value = "white") +
+  labs(
+    title = "Hospitals per 10,000 Residents (Mexico, 2010)",
+    fill = "Hosp / 10k"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid  = element_blank()
+  )
+
 ```

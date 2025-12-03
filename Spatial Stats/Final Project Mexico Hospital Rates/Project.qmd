@@ -166,7 +166,7 @@ Hosp_pop_xy$bn_cluster[cl_bn$location$idx] <- "High hospital density"
 Lets plot the B_N Method
 
 ```{r}
-ggplot(Hosp_pop_xy_2010, aes(x = lon, y = lat)) +
+ggplot(Hosp_pop_xy, aes(x = lon, y = lat)) +
   geom_point(aes(color = bn_cluster), size = 1.4, alpha = 0.85) +
   scale_color_viridis_d(
     option = "C",
@@ -184,7 +184,6 @@ ggplot(Hosp_pop_xy_2010, aes(x = lon, y = lat)) +
     panel.grid = element_blank(),
     legend.position = "bottom"
   )
-dd
 ```
 
 ## Data Exploration Per Capita Hospital and Diff
@@ -402,28 +401,30 @@ state_sf <- mex_shp |>
 states_pts <- pts_sf |> 
   filter(state_code %in% states_codes)
 
-plot(st_geometry(chih_sf), col = "white", border = "gray")
-plot(st_geometry(chih_pts), col = "red", add = TRUE, cex = 0.5)
+plot(st_geometry(state_sf), col = "white", border = "gray")
+plot(st_geometry(states_pts), col = "red", add = TRUE, cex = 0.5)
 ```
 
 ```{r}
 
 # Make sure CLAVE is 5-character string in your data
-Hosp_pop_north_2010 <- Hosp_pop_north_2010 %>%
+Hosp_pop_north <- Hosp_pop_north %>%
   mutate(CLAVE = sprintf("%05d", as.integer(CLAVE)))
 
 # Create full municipal ID in shapefile: SS + MMM
-mex_north_sf <- mex_north_sf %>%
+mex_north_sf <- state_sf %>%
   mutate(
     CLAVE = paste0(
       sprintf("%02d", as.integer(CVE_ENT)),
       sprintf("%03d", as.integer(CVE_MUN))
     )
   )
+state_sf <- state_sf %>% mutate(CLAVE = as.numeric(CLAVE))
+Hosp_pop_north <- Hosp_pop_north %>% mutate(CLAVE = as.numeric(CLAVE))
 
-mex_north_joined <- mex_north_sf %>%
+mex_north_joined <- state_sf %>%
   left_join(
-    Hosp_pop_north_2010,
+    Hosp_pop_north,
     by = "CLAVE"
   )
 
@@ -590,7 +591,7 @@ bn_out_n_68_3$clusters[[1]][c("cases", "population", "pvalue")]
 
 ```
 
-## Cluster Evaluation Permutation Procedure Northern  States
+## Cluster Evaluation Permutation Procedure Northern States
 
 Ho: There is no window with n\* persons that has significantly more clinics in the U.S. Mexico border states than what is expected under the CRH
 

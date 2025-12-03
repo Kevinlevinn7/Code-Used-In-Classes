@@ -61,4 +61,5 @@ local vars num_of_total num_of_total_rural num_of_total_urban
 collapse (first) `vars', by(State_Municipality)
 
 
+export delimited using "/Users/kevin/Documents/Code-Used-In-Classes/Spatial Stats/Final Project Mexico Hospital Rates/Num_of_Clinics.csv", replace
 

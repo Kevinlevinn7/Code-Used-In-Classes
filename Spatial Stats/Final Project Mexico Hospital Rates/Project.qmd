@@ -13,6 +13,8 @@ library(ggplot2)
 library(dplyr)
 library(RColorBrewer)
 library(smerc)
+library(spdep)
+library(dplyr)
 ```
 
 # Loading In Data and Pre-Processing
@@ -434,8 +436,8 @@ ggplot(mex_north_joined) +
   geom_sf(aes(fill = num_of_total), color = "gray40", linewidth = 0.1) +
   scale_fill_viridis_c(option = "magma", na.value = "white") +
   labs(
-    title = "Hospital Counts by Municipality (Northern Border States, 2010)",
-    fill = "Hospitals"
+    title = "Clinics Counts by Municipality",
+    fill = "Clinics"
   ) +
   theme_minimal(base_size = 13) +
   theme(
@@ -453,7 +455,7 @@ ggplot(mex_north_joined) +
   scale_fill_viridis_c(option = "plasma", na.value = "white",
                        labels = scales::comma) +
   labs(
-    title = "Population by Municipality (Northern Border States, 2010)",
+    title = "Population by Municipality",
     fill = "Population"
   ) +
   theme_minimal(base_size = 13) +
@@ -462,20 +464,22 @@ ggplot(mex_north_joined) +
     axis.title = element_blank(),
     panel.grid = element_blank()
   )
+
 ```
 
 ```{r}
 mex_north_joined <- mex_north_joined %>%
   mutate(
-    hosp_per_10k = (num_of_total / POB_TOTAL) * 10000
+    Risk = (sum(num_of_total, na.rm = TRUE) / 
+            sum(POB_TOTAL, na.rm = TRUE)) * POB_TOTAL
   )
 
 ggplot(mex_north_joined) +
-  geom_sf(aes(fill = hosp_per_10k), color = "gray40", linewidth = 0.1) +
+  geom_sf(aes(fill = Risk), color = "gray40", linewidth = 0.1) +
   scale_fill_viridis_c(option = "cividis", na.value = "white") +
   labs(
-    title = "Hospitals per 10,000 Residents (Northern Border States, 2025)",
-    fill = "Hosp / 10k"
+    title = "Expected Clinics Under Constant Risk (CRH)",
+    fill  = "Expected Clinics"
   ) +
   theme_minimal(base_size = 13) +
   theme(
@@ -574,6 +578,7 @@ ncol[bn_out_n_68_3$clusters[[1]]$locids] = mycol[3]
 
 plot(sf::st_geometry(mex_north_joined),
      border = "grey60",
+     main = " B-N Method Clusters",
      axes   = TRUE,
      col    = ncol)
 
@@ -637,6 +642,22 @@ cepp_list_05_n <-cepp.test(
 
 ```
 
+```{r}
+# Example for 1% window
+cepp_list_01_n$clusters[[1]][c("cases", "expected", "pvalue")]
+
+cepp_list_03_n$clusters[[1]][c("cases", "expected", "pvalue")]
+cepp_list_05_n$clusters[[1]][c("cases", "expected", "pvalue")]
+
+cepp_list_01_n$clusters[[1]]$locids
+cepp_list_03_n$clusters[[1]]$locids
+cepp_list_05_n$clusters[[1]]$locids
+```
+
+```{r}
+clusters(cepp_list_01)
+```
+
 Lets go ahead and plot our tests
 
 ```{r}
@@ -676,6 +697,7 @@ plot(
   sf::st_geometry(mex_north_joined),
   border = "grey60",
   axes   = TRUE,
+  main = "Scan Test",
   col    = color.clusters(scan_out_north, col = mycol)
 )
 
@@ -685,6 +707,47 @@ legend(
   lwd = 8,
   col = mycol
 )
+```
+
+```{r}
+# Extract primary cluster location indices
+idx1 <- scan_out_north$clusters[[1]]$locids
+
+# Color everything gray, primary cluster red
+cluster_col <- rep("grey85", nrow(mex_north_joined))
+cluster_col[idx1] <- "red"
+
+# Extract stats for annotation
+main_stats <- scan_out_north$clusters[[1]][c("cases","expected","relative_risk","pvalue")]
+
+plot(
+  sf::st_geometry(mex_north_joined),
+  border = "grey60",
+  axes   = TRUE,
+  col    = cluster_col,
+  main   = "Primary Kulldorff Scan Cluster"
+)
+
+# Thicken ONLY the primary cluster border
+plot(
+  sf::st_geometry(mex_north_joined)[idx1],
+  add    = TRUE,
+  border = "black",
+  lwd    = 2.5
+)
+
+legend(
+  "topright",
+  legend = c(
+    "Primary Cluster",
+    paste("RR =", round(as.numeric(main_stats["relative_risk"]), 2)),
+    paste("p =", round(main_stats["pvalue"], 4))
+  ),
+  fill = c("red", NA, NA),
+  border = c("black", NA, NA),
+  bty = "n"
+)
+
 ```
 
 Now lets extract the exact municipalities where they're are clusters
@@ -774,12 +837,30 @@ ggplot(mex_all_joined) +
 ```{r}
 
 hospnb <- poly2nb(mex_north_joined)
-w = nb2mat(hospnb, style = "B")
+w = nb2listw(hospnb, style = "W")
 # see ?nb2listw for more options
-mex_north_joined$num_of_total
+mex_north_joined$num_of_clinics_expected <- sum(mex_north_joined$num_of_total) / sum(mex_north_joined$POB_TOTAL) * mex_north_joined$POB_TOTAL  
 
 ```
 
 ```{r}
-smerc::morancr.test(cases = cases_n, pop = pop_n, w = w, ex = ex_n)
+moran.mc(
+  mex_north_joined$num_of_total,
+  w,
+  nsim = 999,
+  zero.policy = T
+)
+moran.mc(
+  mex_north_joined$num_of_clinics_expected,
+  w,
+  nsim = 999,
+  zero.policy = T
+)
+```
+
+```{r}
+summary(mex_north_joined$POB_TOTAL)
+summary(mex_north_joined$num_of_total)
+summary(mex_north_joined$num_of_clinics_expected)
+summary(mex_north_joined$hosp_per_10k)
 ```

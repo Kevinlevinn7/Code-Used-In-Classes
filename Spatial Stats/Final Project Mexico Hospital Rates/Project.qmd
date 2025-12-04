@@ -383,7 +383,7 @@ for (yy in years) {
 
 ```
 
-# Northen States Analsysis
+# Northen States Analysis
 
 ## Northen States Plots
 
@@ -767,4 +767,19 @@ ggplot(mex_all_joined) +
     panel.grid  = element_blank()
   )
 
+```
+
+## Moran's I with Local Rates
+
+```{r}
+
+hospnb <- poly2nb(mex_north_joined)
+w = nb2mat(hospnb, style = "B")
+# see ?nb2listw for more options
+mex_north_joined$num_of_total
+
+```
+
+```{r}
+smerc::morancr.test(cases = cases_n, pop = pop_n, w = w, ex = ex_n)
 ```

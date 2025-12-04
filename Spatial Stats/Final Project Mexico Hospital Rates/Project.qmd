@@ -856,6 +856,11 @@ moran.mc(
   nsim = 999,
   zero.policy = T
 )
+
+morancr.test(mex_north_joined$num_of_total,
+             pop = mex_north_joined$POB_TOTAL,
+             ex = mex_north_joined$num_of_clinics_expected,
+             w = nb2mat(hospnb, style = "B"))
 ```
 
 ```{r}

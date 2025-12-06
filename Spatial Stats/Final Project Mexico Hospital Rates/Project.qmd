@@ -430,6 +430,11 @@ mex_north_joined <- state_sf %>%
     by = "CLAVE"
   )
 
+pop_cutoff <- quantile(mex_north_joined$POB_TOTAL, 0.99, na.rm = TRUE)
+
+mex_north_joined <- mex_north_joined %>%
+  filter(POB_TOTAL  < pop_cutoff)
+
 
 
 ggplot(mex_north_joined) +
@@ -867,5 +872,5 @@ morancr.test(mex_north_joined$num_of_total,
 summary(mex_north_joined$POB_TOTAL)
 summary(mex_north_joined$num_of_total)
 summary(mex_north_joined$num_of_clinics_expected)
-summary(mex_north_joined$hosp_per_10k)
+
 ```
